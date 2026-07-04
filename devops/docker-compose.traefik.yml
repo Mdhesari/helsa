@@ -18,7 +18,7 @@ services:
       traefik.docker.network: ${TRAEFIK_NETWORK:-traefik}
       traefik.http.routers.helsa.rule: Host(`${HELSA_DOMAIN:?Set HELSA_DOMAIN in devops/.env (see .env.example)}`)
       traefik.http.routers.helsa.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
-      traefik.http.routers.ezbookkeeping.tls: ${TRAEFIK_TLS:-true}
+      traefik.http.routers.helsa.tls: ${TRAEFIK_TLS:-true}
       traefik.http.services.helsa.loadbalancer.server.port: "8080"
 
 networks:
