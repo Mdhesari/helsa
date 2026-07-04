@@ -4,7 +4,9 @@ Two containers: `backend` (Go API, internal-only) and `frontend` (nginx serving
 the built SPA and reverse-proxying `/api` to the backend). SQLite data persists
 on the named volume `helsa-data`.
 
-## Run
+## Run locally (build from source)
+
+No CI/CD or registry involved — `--build` builds the images on your machine:
 
 ```sh
 cd devops
@@ -15,11 +17,41 @@ docker compose up -d --build
 App: http://localhost:3000 (change with `HELSA_HTTP_PORT` in `.env`).
 The backend publishes no host ports; only nginx is exposed.
 
+## Deploy to a server (pull CI-built images)
+
+Pushes to `main` trigger [.github/workflows/docker-publish.yml](../.github/workflows/docker-publish.yml),
+which builds both images and pushes them to GHCR as
+`ghcr.io/mdhesari/helsa-{backend,frontend}` tagged `latest` and `sha-<commit>`.
+
+One-time server setup:
+
+```sh
+# only needed while the GHCR packages are private:
+# use a classic PAT with read:packages scope
+docker login ghcr.io -u mdhesari
+
+git clone git@github.com:Mdhesari/helsa.git && cd helsa/devops
+cp .env.example .env      # set JWT_SECRET etc.
+```
+
+Each deploy:
+
+```sh
+docker compose pull && docker compose up -d --no-build
+```
+
+`--no-build` makes compose use the pulled images and ignore the `build:`
+sections. Pin a specific version by setting `HELSA_IMAGE_TAG=sha-<commit>`
+in `.env` instead of the default `latest`.
+
+Note: CI images are `linux/amd64`. On an ARM server (or Apple Silicon),
+build locally with `--build` instead, or add multi-arch to the workflow.
+
 ## Behind an existing Traefik
 
 If you already run Traefik, layer the override instead of publishing a port
-(set `HELSA_DOMAIN` — and `TRAEFIK_NETWORK` / `TRAEFIK_ENTRYPOINT` /
-`TRAEFIK_CERT_RESOLVER` if yours differ from the defaults — in `.env`):
+(set `HELSA_DOMAIN` — and `TRAEFIK_NETWORK` / `TRAEFIK_ENTRYPOINT` if yours
+differ from the defaults — in `.env`):
 
 ```sh
 docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d --build

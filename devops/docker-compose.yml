@@ -2,6 +2,9 @@ name: helsa
 
 services:
   backend:
+    # Local: `up -d --build` builds this image from source.
+    # Server: `pull` fetches the CI-built image from GHCR instead.
+    image: ghcr.io/mdhesari/helsa-backend:${HELSA_IMAGE_TAG:-latest}
     build:
       context: ..
       dockerfile: devops/Dockerfile.backend
@@ -25,6 +28,7 @@ services:
       start_period: 10s
 
   frontend:
+    image: ghcr.io/mdhesari/helsa-frontend:${HELSA_IMAGE_TAG:-latest}
     build:
       context: ..
       dockerfile: devops/Dockerfile.frontend
