@@ -1,0 +1,39 @@
+# syntax=docker/dockerfile:1
+# Build context: repo root (see devops/docker-compose.yml)
+
+# ---- build stage ----
+FROM golang:1.24-alpine AS build
+
+WORKDIR /src
+
+# Cache module downloads separately from source changes.
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+
+COPY backend/ ./
+# modernc.org/sqlite is pure Go, so a fully static CGO-free build works.
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" \
+    -o /out/helsa-server ./cmd/server
+
+# ---- runtime stage ----
+# alpine (not scratch) so the compose healthcheck can use busybox wget.
+FROM alpine:3.21
+
+RUN addgroup -S -g 10001 helsa \
+    && adduser -S -u 10001 -G helsa helsa \
+    && mkdir -p /data \
+    && chown helsa:helsa /data
+
+COPY --from=build /out/helsa-server /usr/local/bin/helsa-server
+
+USER helsa
+
+ENV PORT=8080 \
+    DB_PATH=/data/helsa.db
+
+# SQLite database lives here; mounted as a named volume in compose.
+VOLUME /data
+
+EXPOSE 8080
+
+ENTRYPOINT ["/usr/local/bin/helsa-server"]

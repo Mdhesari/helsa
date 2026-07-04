@@ -1,0 +1,2 @@
+# Secrets for the docker compose deployment (see devops/.env.example)
+devops/.env

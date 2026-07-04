@@ -1,0 +1,46 @@
+name: helsa
+
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: devops/Dockerfile.backend
+    restart: unless-stopped
+    # Internal only — no published ports; nginx proxies /api to it.
+    environment:
+      PORT: "8080"
+      DB_PATH: /data/helsa.db
+      # Fail fast if JWT_SECRET is missing instead of letting the app fall
+      # back to its insecure dev secret.
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in devops/.env (see .env.example)}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-anthropic/claude-sonnet-5}
+    volumes:
+      - helsa-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:8080/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: devops/Dockerfile.frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      # Host 8080 is taken on this machine; default to 3000, override via .env.
+      - "${HELSA_HTTP_PORT:-3000}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  helsa-data:

@@ -1,0 +1,27 @@
+# Override for running behind an existing external Traefik instance.
+# Traefik itself is NOT included — it must already be running and attached
+# to the external network below.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d --build
+
+services:
+  frontend:
+    # Traefik reaches the container directly over the shared network;
+    # drop the host port mapping from the base file.
+    ports: !override []
+    networks:
+      - default
+      - traefik
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${TRAEFIK_NETWORK:-traefik}
+      traefik.http.routers.helsa.rule: Host(`${HELSA_DOMAIN:?Set HELSA_DOMAIN in devops/.env (see .env.example)}`)
+      traefik.http.routers.helsa.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.helsa.tls.certresolver: ${TRAEFIK_CERT_RESOLVER:-letsencrypt}
+      traefik.http.services.helsa.loadbalancer.server.port: "8080"
+
+networks:
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik}

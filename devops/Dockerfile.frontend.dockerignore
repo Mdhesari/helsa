@@ -1,0 +1,7 @@
+# BuildKit per-Dockerfile ignore file (used because the build context is the
+# repo root). Whitelist approach: only frontend sources + the nginx config.
+*
+!frontend/
+!devops/nginx.conf
+frontend/node_modules/
+frontend/dist/
