@@ -6,6 +6,9 @@ import (
 	"net"
 	"net/http"
 	"time"
+	// Embed the IANA timezone database so time.LoadLocation works in
+	// containers without a system tzdata package.
+	_ "time/tzdata"
 
 	"helsa/backend/internal/api"
 	"helsa/backend/internal/config"
