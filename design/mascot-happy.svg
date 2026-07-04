@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-labelledby="pip-happy-title">
+  <title id="pip-happy-title">Pip the sprout, smiling</title>
+  <!-- sprout -->
+  <path d="M97 60 C 90 42 74 32 56 34 C 58 52 74 62 94 60 Z" fill="#2e6b04"/>
+  <path d="M103 58 C 106 36 124 22 146 26 C 144 48 126 60 105 60 Z" fill="#46a302"/>
+  <rect x="96" y="48" width="8" height="26" rx="4" fill="#2e6b04"/>
+  <!-- body -->
+  <ellipse cx="100" cy="124" rx="62" ry="56" fill="#58cc02"/>
+  <ellipse cx="100" cy="152" rx="34" ry="22" fill="#ddf6c2"/>
+  <!-- feet -->
+  <ellipse cx="78" cy="180" rx="13" ry="8" fill="#2e6b04"/>
+  <ellipse cx="122" cy="180" rx="13" ry="8" fill="#2e6b04"/>
+  <!-- arms (relaxed) -->
+  <ellipse cx="44" cy="138" rx="9" ry="17" fill="#46a302" transform="rotate(24 44 138)"/>
+  <ellipse cx="156" cy="138" rx="9" ry="17" fill="#46a302" transform="rotate(-24 156 138)"/>
+  <!-- face -->
+  <circle cx="80" cy="104" r="9" fill="#23221c"/>
+  <circle cx="120" cy="104" r="9" fill="#23221c"/>
+  <circle cx="83" cy="101" r="3" fill="#ffffff"/>
+  <circle cx="123" cy="101" r="3" fill="#ffffff"/>
+  <ellipse cx="61" cy="118" rx="9" ry="6" fill="#ffd18f"/>
+  <ellipse cx="139" cy="118" rx="9" ry="6" fill="#ffd18f"/>
+  <path d="M88 118 Q100 130 112 118" fill="none" stroke="#23221c" stroke-width="6" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-labelledby="pip-sleep-title">
+  <title id="pip-sleep-title">Pip the sprout, asleep</title>
+  <!-- zzz -->
+  <path d="M18 68 h10 l-10 10 h10" fill="none" stroke="#a9a69a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M30 46 h12 l-12 12 h12" fill="none" stroke="#a9a69a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M38 18 h13 l-13 13 h13" fill="none" stroke="#a9a69a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- sprout -->
+  <path d="M97 60 C 90 42 74 32 56 34 C 58 52 74 62 94 60 Z" fill="#2e6b04"/>
+  <path d="M103 58 C 106 36 124 22 146 26 C 144 48 126 60 105 60 Z" fill="#46a302"/>
+  <rect x="96" y="48" width="8" height="26" rx="4" fill="#2e6b04"/>
+  <!-- body -->
+  <ellipse cx="100" cy="124" rx="62" ry="56" fill="#58cc02"/>
+  <ellipse cx="100" cy="152" rx="34" ry="22" fill="#ddf6c2"/>
+  <!-- feet -->
+  <ellipse cx="78" cy="180" rx="13" ry="8" fill="#2e6b04"/>
+  <ellipse cx="122" cy="180" rx="13" ry="8" fill="#2e6b04"/>
+  <!-- arms (relaxed) -->
+  <ellipse cx="44" cy="138" rx="9" ry="17" fill="#46a302" transform="rotate(24 44 138)"/>
+  <ellipse cx="156" cy="138" rx="9" ry="17" fill="#46a302" transform="rotate(-24 156 138)"/>
+  <!-- face -->
+  <path d="M71 102 Q80 110 89 102" fill="none" stroke="#23221c" stroke-width="6" stroke-linecap="round"/>
+  <path d="M111 102 Q120 110 129 102" fill="none" stroke="#23221c" stroke-width="6" stroke-linecap="round"/>
+  <ellipse cx="61" cy="118" rx="9" ry="6" fill="#ffd18f"/>
+  <ellipse cx="139" cy="118" rx="9" ry="6" fill="#ffd18f"/>
+  <ellipse cx="100" cy="124" rx="5" ry="6" fill="#23221c"/>
+</svg>

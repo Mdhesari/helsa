@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "backend",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd backend && PORT=8790 go run ./cmd/server"],
+      "port": 8790,
+      "autoPort": false
+    },
+    {
+      "name": "frontend",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd frontend && BACKEND_PORT=8790 npm run dev -- --port ${PORT:-5173} --strictPort"],
+      "port": 5173,
+      "autoPort": true
+    }
+  ]
+}

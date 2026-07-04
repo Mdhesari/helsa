@@ -1,0 +1,129 @@
+@import 'tailwindcss';
+@import './design/tokens.css';
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-sand-100 font-sans text-sand-900 antialiased;
+  }
+  input,
+  select,
+  textarea {
+    font-size: 16px; /* prevent iOS zoom-on-focus */
+  }
+}
+
+/* Chunky Duolingo-style button base (registered as a utility so the
+   variant classes below can @apply it). */
+@utility btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: var(--radius-btn);
+  padding: 0.75rem 1.25rem;
+  text-align: center;
+  font-weight: 800;
+  letter-spacing: 0.025em;
+  user-select: none;
+  transition: all 100ms;
+  &:active:not(:disabled) {
+    transform: translateY(4px);
+    box-shadow: none !important;
+  }
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-(--radius-card) bg-white p-4 shadow-(--shadow-card);
+  }
+
+  .btn-primary {
+    /* primary-900 on primary-500 is 5.9:1 (AA); white would be 2.1:1 */
+    @apply btn bg-primary-500 text-primary-900 shadow-(--shadow-btn) uppercase;
+  }
+  .btn-neutral {
+    @apply btn border-2 border-sand-200 bg-white text-sand-700 shadow-(--shadow-btn-neutral);
+  }
+  .btn-ghost {
+    @apply btn text-sand-500 hover:text-sand-700;
+  }
+  .btn-danger-ghost {
+    @apply btn px-3 py-2 text-danger;
+  }
+
+  .input {
+    @apply w-full rounded-(--radius-btn) border-2 border-sand-200 bg-white px-4 py-3 font-semibold text-sand-900 placeholder-sand-400 outline-none focus:border-primary-400;
+  }
+  .label {
+    @apply mb-1 block text-sm font-bold text-sand-600;
+  }
+  .field-error {
+    @apply mt-1 text-sm font-semibold text-danger;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold;
+  }
+
+  .skeleton {
+    @apply animate-pulse rounded-xl bg-sand-200;
+  }
+}
+
+@utility animate-pop-in {
+  animation: pop-in 0.35s var(--ease-bounce) both;
+}
+@utility animate-toast-in {
+  animation: toast-in 0.3s var(--ease-bounce) both;
+}
+@utility animate-wiggle {
+  animation: wiggle 0.6s ease-in-out;
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes wiggle {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-6deg);
+  }
+  75% {
+    transform: rotate(6deg);
+  }
+}
+
+/* Hide scrollbar for the onboarding carousel */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
