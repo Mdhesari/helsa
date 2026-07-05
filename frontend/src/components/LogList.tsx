@@ -1,5 +1,14 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Pencil, Trash2 } from 'lucide-react'
+
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 import * as api from '../api/client'
 import { errorMessage } from '../api/client'
 import type { FoodLog, FoodLogInput } from '../api/types'
@@ -43,58 +52,55 @@ export function LogList({ logs }: { logs: FoodLog[] }) {
     <>
       <ul className="space-y-2">
         {logs.map((log) => (
-          <li key={log.id} className="card flex items-center gap-3 py-3">
+          <li
+            key={log.id}
+            className="flex items-center gap-3 rounded-2xl border bg-card px-4 py-3 shadow-[0_1px_2px_rgb(0_0_0/0.03)]"
+          >
             <div className="min-w-0 flex-1">
-              <p className="truncate font-bold text-sand-800">{log.food_name}</p>
-              <p className="truncate text-xs font-semibold text-sand-400">
+              <p className="truncate font-medium">{log.food_name}</p>
+              <p className="truncate text-xs text-muted-foreground">
                 {formatTime(log.logged_at)}
                 {log.serving && ` · ${log.serving}`}
                 {` · P ${Math.round(log.protein_g)} · C ${Math.round(log.carbs_g)} · F ${Math.round(log.fat_g)}`}
               </p>
             </div>
-            <span className="font-extrabold text-sand-700 tabular-nums">
+            <span className="font-semibold tabular-nums">
               {Math.round(log.calories)}
-              <span className="ml-0.5 text-[10px] font-bold text-sand-400">kcal</span>
+              <span className="ml-0.5 text-[10px] font-medium text-muted-foreground">
+                kcal
+              </span>
             </span>
-            <div className="flex shrink-0 gap-1">
-              <button
-                type="button"
+            <div className="flex shrink-0 gap-0.5">
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 aria-label={`Edit ${log.food_name}`}
-                className="rounded-lg p-2 text-sand-400 hover:bg-sand-100 hover:text-sand-600"
+                className="text-muted-foreground"
                 onClick={() => setEditing(log)}
               >
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M4 20h4L20 8l-4-4L4 16v4z" />
-                </svg>
-              </button>
-              <button
-                type="button"
+                <Pencil strokeWidth={1.8} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 aria-label={`Delete ${log.food_name}`}
-                className="rounded-lg p-2 text-sand-400 hover:bg-red-50 hover:text-danger"
+                className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                 onClick={() => handleDelete(log)}
                 disabled={remove.isPending}
               >
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" />
-                </svg>
-              </button>
+                <Trash2 strokeWidth={1.8} />
+              </Button>
             </div>
           </li>
         ))}
       </ul>
 
-      {editing && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-sand-900/40 sm:items-center"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Edit food log"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setEditing(null)
-          }}
-        >
-          <div className="animate-pop-in w-full max-w-md rounded-t-3xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:rounded-3xl">
-            <h2 className="mb-4 text-lg font-extrabold text-sand-800">Edit log</h2>
+      <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
+        <DialogContent aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>Edit log</DialogTitle>
+          </DialogHeader>
+          {editing && (
             <FoodLogForm
               key={editing.id}
               initialValues={editing}
@@ -104,9 +110,9 @@ export function LogList({ logs }: { logs: FoodLog[] }) {
               onCancel={() => setEditing(null)}
               onSubmit={(input) => update.mutate({ id: editing.id, input })}
             />
-          </div>
-        </div>
-      )}
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

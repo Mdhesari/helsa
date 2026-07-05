@@ -1,12 +1,124 @@
 @import 'tailwindcss';
-@import './design/tokens.css';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Helsa theme — shadcn/ui (Tailwind v4), near-monochrome & minimal.
+ * White surfaces, near-black primary, muted gray secondary text.
+ * Macro accents (protein / carbs / fat) are the only color in the app.
+ */
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.145 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.145 0 0);
+  --radius: 1rem;
+
+  /* Macro accents — the only chromatic tokens in the design. */
+  --protein: oklch(0.637 0.176 25.3); /* soft red   */
+  --carbs: oklch(0.75 0.14 75); /* warm amber */
+  --fat: oklch(0.623 0.155 253); /* calm blue  */
+  --calories: oklch(0.145 0 0); /* near-black */
+
+  --chart-1: var(--calories);
+  --chart-2: var(--protein);
+  --chart-3: var(--carbs);
+  --chart-4: var(--fat);
+  --chart-5: oklch(0.556 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-protein: var(--protein);
+  --color-carbs: var(--carbs);
+  --color-fat: var(--fat);
+  --color-calories: var(--calories);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --radius-sm: calc(var(--radius) - 8px);
+  --radius-md: calc(var(--radius) - 4px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+
+  --font-sans:
+    'Inter', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
 
 @layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
   html {
     -webkit-tap-highlight-color: transparent;
   }
   body {
-    @apply bg-sand-100 font-sans text-sand-900 antialiased;
+    @apply bg-background font-sans text-foreground antialiased;
+    font-feature-settings:
+      'cv11' 1,
+      'ss01' 1;
   }
   input,
   select,
@@ -15,73 +127,12 @@
   }
 }
 
-/* Chunky Duolingo-style button base (registered as a utility so the
-   variant classes below can @apply it). */
-@utility btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  border-radius: var(--radius-btn);
-  padding: 0.75rem 1.25rem;
-  text-align: center;
-  font-weight: 800;
-  letter-spacing: 0.025em;
-  user-select: none;
-  transition: all 100ms;
-  &:active:not(:disabled) {
-    transform: translateY(4px);
-    box-shadow: none !important;
-  }
-  &:disabled {
-    cursor: not-allowed;
-    opacity: 0.6;
-  }
-}
-
-@layer components {
-  .card {
-    @apply rounded-(--radius-card) bg-white p-4 shadow-(--shadow-card);
-  }
-
-  .btn-primary {
-    /* primary-900 on primary-500 is 5.9:1 (AA); white would be 2.1:1 */
-    @apply btn bg-primary-500 text-primary-900 shadow-(--shadow-btn) uppercase;
-  }
-  .btn-neutral {
-    @apply btn border-2 border-sand-200 bg-white text-sand-700 shadow-(--shadow-btn-neutral);
-  }
-  .btn-ghost {
-    @apply btn text-sand-500 hover:text-sand-700;
-  }
-  .btn-danger-ghost {
-    @apply btn px-3 py-2 text-danger;
-  }
-
-  .input {
-    @apply w-full rounded-(--radius-btn) border-2 border-sand-200 bg-white px-4 py-3 font-semibold text-sand-900 placeholder-sand-400 outline-none focus:border-primary-400;
-  }
-  .label {
-    @apply mb-1 block text-sm font-bold text-sand-600;
-  }
-  .field-error {
-    @apply mt-1 text-sm font-semibold text-danger;
-  }
-
-  .chip {
-    @apply inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold;
-  }
-
-  .skeleton {
-    @apply animate-pulse rounded-xl bg-sand-200;
-  }
-}
-
+/* Gentle entrance used across cards and dialogs. */
 @utility animate-pop-in {
-  animation: pop-in 0.35s var(--ease-bounce) both;
+  animation: pop-in 0.35s cubic-bezier(0.21, 1.02, 0.73, 1) both;
 }
 @utility animate-toast-in {
-  animation: toast-in 0.3s var(--ease-bounce) both;
+  animation: toast-in 0.3s cubic-bezier(0.21, 1.02, 0.73, 1) both;
 }
 @utility animate-wiggle {
   animation: wiggle 0.6s ease-in-out;
@@ -90,7 +141,7 @@
 @keyframes pop-in {
   from {
     opacity: 0;
-    transform: scale(0.85) translateY(8px);
+    transform: scale(0.97) translateY(6px);
   }
   to {
     opacity: 1;
@@ -100,7 +151,7 @@
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(16px) scale(0.95);
+    transform: translateY(12px) scale(0.97);
   }
   to {
     opacity: 1;

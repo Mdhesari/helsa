@@ -1,8 +1,11 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { useAuth } from '../auth/AuthContext'
 import { errorMessage, isApiError } from '../api/client'
-import { Mascot } from '../components/Mascot'
 
 export function Login() {
   const { login } = useAuth()
@@ -25,7 +28,7 @@ export function Login() {
       navigate('/app', { replace: true })
     } catch (err) {
       if (isApiError(err) && err.code === 'invalid_credentials') {
-        setError("That email and password don't match. Give it another try!")
+        setError("That email and password don't match. Give it another try.")
       } else {
         setError(errorMessage(err))
       }
@@ -35,23 +38,19 @@ export function Login() {
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-6 bg-sand-50 p-6">
-      <div className="flex flex-col items-center gap-2 text-center">
-        <Mascot pose="happy" size={100} className="animate-pop-in" />
-        <h1 className="text-2xl font-extrabold text-sand-900">Welcome back!</h1>
-        <p className="text-sm font-medium text-sand-500">
-          Your streak missed you. Log in to keep it going.
+    <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-8 bg-background px-6 py-10 sm:border-x">
+      <div className="space-y-2">
+        <h1 className="text-4xl font-bold tracking-tight">Welcome back</h1>
+        <p className="text-muted-foreground">
+          Log in to keep your streak going.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-        <div>
-          <label className="label" htmlFor="email">
-            Email
-          </label>
-          <input
+      <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+        <div className="space-y-1.5">
+          <Label htmlFor="email">Email</Label>
+          <Input
             id="email"
-            className="input"
             type="email"
             autoComplete="email"
             placeholder="you@example.com"
@@ -59,13 +58,10 @@ export function Login() {
             onChange={(e) => setEmail(e.target.value)}
           />
         </div>
-        <div>
-          <label className="label" htmlFor="password">
-            Password
-          </label>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="password">Password</Label>
+          <Input
             id="password"
-            className="input"
             type="password"
             autoComplete="current-password"
             placeholder="Your password"
@@ -75,19 +71,19 @@ export function Login() {
         </div>
 
         {error && (
-          <p className="field-error" role="alert">
+          <p className="text-sm font-medium text-destructive" role="alert">
             {error}
           </p>
         )}
 
-        <button type="submit" className="btn-primary w-full" disabled={busy}>
+        <Button type="submit" size="xl" className="w-full" disabled={busy}>
           {busy ? 'Logging in…' : 'Log in'}
-        </button>
+        </Button>
       </form>
 
-      <p className="text-center text-sm font-semibold text-sand-500">
+      <p className="text-center text-sm text-muted-foreground">
         New to Helsa?{' '}
-        <Link to="/register" className="font-extrabold text-primary-600">
+        <Link to="/register" className="font-semibold text-foreground underline underline-offset-4">
           Create an account
         </Link>
       </p>

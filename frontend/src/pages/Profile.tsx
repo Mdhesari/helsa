@@ -1,5 +1,19 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Download, LogOut } from 'lucide-react'
+
+import { Button } from '@/components/ui/button'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { NativeSelect } from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
 import * as api from '../api/client'
 import { errorMessage, isApiError } from '../api/client'
 import type { ActivityLevel, Profile as ProfileShape, Sex } from '../api/types'
@@ -41,54 +55,52 @@ function AccountCard() {
   })
 
   return (
-    <section className="card space-y-4">
-      <h2 className="font-extrabold text-sand-800">Account</h2>
-      <div>
-        <label className="label" htmlFor="acc_name">
-          Full name
-        </label>
-        <input
-          id="acc_name"
-          className="input"
-          autoComplete="name"
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
-        />
-      </div>
-      <div>
-        <label className="label" htmlFor="acc_tz">
-          Timezone
-        </label>
-        <select
-          id="acc_tz"
-          className="input"
-          value={timezone}
-          onChange={(e) => setTimezone(e.target.value)}
+    <Card>
+      <CardHeader>
+        <CardTitle>Account</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="acc_name">Full name</Label>
+          <Input
+            id="acc_name"
+            autoComplete="name"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="acc_tz">Timezone</Label>
+          <NativeSelect
+            id="acc_tz"
+            value={timezone}
+            onChange={(e) => setTimezone(e.target.value)}
+          >
+            {zones.map((z) => (
+              <option key={z} value={z}>
+                {z}
+              </option>
+            ))}
+          </NativeSelect>
+          <p className="text-xs text-muted-foreground">
+            Your days, streaks and reports follow this timezone.
+          </p>
+        </div>
+        {save.isError && (
+          <p className="text-sm font-medium text-destructive" role="alert">
+            {errorMessage(save.error)}
+          </p>
+        )}
+        <Button
+          size="lg"
+          className="w-full"
+          disabled={save.isPending || !fullName.trim()}
+          onClick={() => save.mutate()}
         >
-          {zones.map((z) => (
-            <option key={z} value={z}>
-              {z}
-            </option>
-          ))}
-        </select>
-        <p className="mt-1 text-xs font-medium text-sand-400">
-          Your days, streaks and reports follow this timezone.
-        </p>
-      </div>
-      {save.isError && (
-        <p className="field-error" role="alert">
-          {errorMessage(save.error)}
-        </p>
-      )}
-      <button
-        type="button"
-        className="btn-primary w-full"
-        disabled={save.isPending || !fullName.trim()}
-        onClick={() => save.mutate()}
-      >
-        {save.isPending ? 'Saving…' : 'Save account'}
-      </button>
-    </section>
+          {save.isPending ? 'Saving…' : 'Save account'}
+        </Button>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -147,18 +159,15 @@ function BiometricsForm({ profile }: { profile: ProfileShape }) {
 
   return (
     <form className="space-y-4" onSubmit={handleSubmit} noValidate>
-      <p className="text-sm font-medium text-sand-500">
+      <p className="text-sm text-muted-foreground">
         All optional — fill in all five and Helsa computes personal calorie and macro
         targets for you.
       </p>
       <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="label" htmlFor="bio_age">
-            Age
-          </label>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="bio_age">Age</Label>
+          <Input
             id="bio_age"
-            className="input"
             type="text"
             inputMode="numeric"
             placeholder="—"
@@ -166,28 +175,22 @@ function BiometricsForm({ profile }: { profile: ProfileShape }) {
             onChange={(e) => setAge(e.target.value)}
           />
         </div>
-        <div>
-          <label className="label" htmlFor="bio_sex">
-            Sex
-          </label>
-          <select
+        <div className="space-y-1.5">
+          <Label htmlFor="bio_sex">Sex</Label>
+          <NativeSelect
             id="bio_sex"
-            className="input"
             value={sex}
             onChange={(e) => setSex(e.target.value as '' | Sex)}
           >
             <option value="">—</option>
             <option value="female">Female</option>
             <option value="male">Male</option>
-          </select>
+          </NativeSelect>
         </div>
-        <div>
-          <label className="label" htmlFor="bio_weight">
-            Weight (kg)
-          </label>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="bio_weight">Weight (kg)</Label>
+          <Input
             id="bio_weight"
-            className="input"
             type="text"
             inputMode="decimal"
             placeholder="—"
@@ -195,13 +198,10 @@ function BiometricsForm({ profile }: { profile: ProfileShape }) {
             onChange={(e) => setWeight(e.target.value)}
           />
         </div>
-        <div>
-          <label className="label" htmlFor="bio_height">
-            Height (cm)
-          </label>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="bio_height">Height (cm)</Label>
+          <Input
             id="bio_height"
-            className="input"
             type="text"
             inputMode="decimal"
             placeholder="—"
@@ -210,13 +210,10 @@ function BiometricsForm({ profile }: { profile: ProfileShape }) {
           />
         </div>
       </div>
-      <div>
-        <label className="label" htmlFor="bio_activity">
-          Activity level
-        </label>
-        <select
+      <div className="space-y-1.5">
+        <Label htmlFor="bio_activity">Activity level</Label>
+        <NativeSelect
           id="bio_activity"
-          className="input"
           value={activity}
           onChange={(e) => setActivity(e.target.value as '' | ActivityLevel)}
         >
@@ -226,16 +223,16 @@ function BiometricsForm({ profile }: { profile: ProfileShape }) {
               {a.label}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </div>
       {(validationError || save.isError) && (
-        <p className="field-error" role="alert">
+        <p className="text-sm font-medium text-destructive" role="alert">
           {validationError ?? errorMessage(save.error)}
         </p>
       )}
-      <button type="submit" className="btn-primary w-full" disabled={save.isPending}>
+      <Button type="submit" size="lg" className="w-full" disabled={save.isPending}>
         {save.isPending ? 'Saving…' : 'Save biometrics'}
-      </button>
+      </Button>
     </form>
   )
 }
@@ -243,20 +240,26 @@ function BiometricsForm({ profile }: { profile: ProfileShape }) {
 function BiometricsCard() {
   const query = useQuery({ queryKey: qk.profile, queryFn: api.getProfile })
   return (
-    <section className="card space-y-4">
-      <h2 className="font-extrabold text-sand-800">Biometrics</h2>
-      {query.isPending ? (
-        <div className="space-y-3">
-          <div className="skeleton h-11 w-full" />
-          <div className="skeleton h-11 w-full" />
-          <div className="skeleton h-11 w-full" />
-        </div>
-      ) : query.isError ? (
-        <p className="field-error">{errorMessage(query.error)}</p>
-      ) : (
-        <BiometricsForm profile={query.data} />
-      )}
-    </section>
+    <Card>
+      <CardHeader>
+        <CardTitle>Biometrics</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {query.isPending ? (
+          <div className="space-y-3">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        ) : query.isError ? (
+          <p className="text-sm font-medium text-destructive">
+            {errorMessage(query.error)}
+          </p>
+        ) : (
+          <BiometricsForm profile={query.data} />
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -298,63 +301,59 @@ function PasswordCard() {
   }
 
   return (
-    <section className="card space-y-4">
-      <h2 className="font-extrabold text-sand-800">Change password</h2>
-      <form className="space-y-4" onSubmit={handleSubmit} noValidate>
-        <div>
-          <label className="label" htmlFor="pw_current">
-            Current password
-          </label>
-          <input
-            id="pw_current"
-            className="input"
-            type="password"
-            autoComplete="current-password"
-            value={current}
-            onChange={(e) => setCurrent(e.target.value)}
-          />
-        </div>
-        <div>
-          <label className="label" htmlFor="pw_new">
-            New password
-          </label>
-          <input
-            id="pw_new"
-            className="input"
-            type="password"
-            autoComplete="new-password"
-            placeholder="At least 8 characters"
-            value={next}
-            onChange={(e) => setNext(e.target.value)}
-          />
-        </div>
-        <div>
-          <label className="label" htmlFor="pw_confirm">
-            Confirm new password
-          </label>
-          <input
-            id="pw_confirm"
-            className="input"
-            type="password"
-            autoComplete="new-password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-          />
-        </div>
-        {error && (
-          <p className="field-error" role="alert">
-            {error}
-          </p>
-        )}
-        <button
-          type="submit"
-          className="btn-primary w-full"
-          disabled={change.isPending || !current || !next}
-        >
-          {change.isPending ? 'Changing…' : 'Change password'}
-        </button>
-      </form>
-    </section>
+    <Card>
+      <CardHeader>
+        <CardTitle>Change password</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form className="space-y-4" onSubmit={handleSubmit} noValidate>
+          <div className="space-y-1.5">
+            <Label htmlFor="pw_current">Current password</Label>
+            <Input
+              id="pw_current"
+              type="password"
+              autoComplete="current-password"
+              value={current}
+              onChange={(e) => setCurrent(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="pw_new">New password</Label>
+            <Input
+              id="pw_new"
+              type="password"
+              autoComplete="new-password"
+              placeholder="At least 8 characters"
+              value={next}
+              onChange={(e) => setNext(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="pw_confirm">Confirm new password</Label>
+            <Input
+              id="pw_confirm"
+              type="password"
+              autoComplete="new-password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+            />
+          </div>
+          {error && (
+            <p className="text-sm font-medium text-destructive" role="alert">
+              {error}
+            </p>
+          )}
+          <Button
+            type="submit"
+            size="lg"
+            className="w-full"
+            disabled={change.isPending || !current || !next}
+          >
+            {change.isPending ? 'Changing…' : 'Change password'}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -378,28 +377,41 @@ function DataCard() {
   }
 
   return (
-    <section className="card space-y-3">
-      <h2 className="font-extrabold text-sand-800">Your data</h2>
-      <button
-        type="button"
-        className="btn-neutral w-full"
-        disabled={exporting}
-        onClick={() => void handleExport()}
-      >
-        {exporting ? 'Preparing…' : 'Export my data (.xlsx)'}
-      </button>
-      <button type="button" className="btn-danger-ghost w-full" onClick={logout}>
-        Log out
-      </button>
-    </section>
+    <Card>
+      <CardHeader>
+        <CardTitle>Your data</CardTitle>
+        <CardDescription>Everything you log belongs to you.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <Button
+          variant="outline"
+          size="lg"
+          className="w-full"
+          disabled={exporting}
+          onClick={() => void handleExport()}
+        >
+          <Download strokeWidth={1.8} />
+          {exporting ? 'Preparing…' : 'Export my data (.xlsx)'}
+        </Button>
+        <Button
+          variant="ghost"
+          size="lg"
+          className="w-full text-destructive hover:bg-destructive/10 hover:text-destructive"
+          onClick={logout}
+        >
+          <LogOut strokeWidth={1.8} />
+          Log out
+        </Button>
+      </CardContent>
+    </Card>
   )
 }
 
 export function Profile() {
   return (
-    <div className="space-y-4 p-4">
+    <div className="space-y-4 p-4 pt-[max(1.25rem,env(safe-area-inset-top))]">
       <header className="px-1">
-        <h1 className="text-xl font-extrabold text-sand-900">Profile</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Profile</h1>
       </header>
       <AccountCard />
       <BiometricsCard />

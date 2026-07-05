@@ -1,8 +1,11 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { useAuth } from '../auth/AuthContext'
 import { errorMessage, isApiError } from '../api/client'
-import { Mascot } from '../components/Mascot'
 
 export function Register() {
   const { register } = useAuth()
@@ -42,36 +45,29 @@ export function Register() {
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-6 bg-sand-50 p-6">
-      <div className="flex flex-col items-center gap-2 text-center">
-        <Mascot pose="happy" size={100} className="animate-pop-in" />
-        <h1 className="text-2xl font-extrabold text-sand-900">Create your account</h1>
-        <p className="text-sm font-medium text-sand-500">
-          Helsa keeps your food diary cozy and simple.
+    <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-8 bg-background px-6 py-10 sm:border-x">
+      <div className="space-y-2">
+        <h1 className="text-4xl font-bold tracking-tight">Create your account</h1>
+        <p className="text-muted-foreground">
+          A calm, simple food diary. Free to start.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-        <div>
-          <label className="label" htmlFor="full_name">
-            Full name
-          </label>
-          <input
+      <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+        <div className="space-y-1.5">
+          <Label htmlFor="full_name">Full name</Label>
+          <Input
             id="full_name"
-            className="input"
             autoComplete="name"
             placeholder="e.g. Sara K"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
           />
         </div>
-        <div>
-          <label className="label" htmlFor="email">
-            Email
-          </label>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="email">Email</Label>
+          <Input
             id="email"
-            className="input"
             type="email"
             autoComplete="email"
             placeholder="you@example.com"
@@ -79,13 +75,10 @@ export function Register() {
             onChange={(e) => setEmail(e.target.value)}
           />
         </div>
-        <div>
-          <label className="label" htmlFor="password">
-            Password
-          </label>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="password">Password</Label>
+          <Input
             id="password"
-            className="input"
             type="password"
             autoComplete="new-password"
             placeholder="At least 8 characters"
@@ -95,19 +88,19 @@ export function Register() {
         </div>
 
         {error && (
-          <p className="field-error" role="alert">
+          <p className="text-sm font-medium text-destructive" role="alert">
             {error}
           </p>
         )}
 
-        <button type="submit" className="btn-primary w-full" disabled={busy}>
+        <Button type="submit" size="xl" className="w-full" disabled={busy}>
           {busy ? 'Creating…' : 'Sign up'}
-        </button>
+        </Button>
       </form>
 
-      <p className="text-center text-sm font-semibold text-sand-500">
+      <p className="text-center text-sm text-muted-foreground">
         Already have an account?{' '}
-        <Link to="/login" className="font-extrabold text-primary-600">
+        <Link to="/login" className="font-semibold text-foreground underline underline-offset-4">
           Log in
         </Link>
       </p>

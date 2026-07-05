@@ -1,4 +1,8 @@
 import { useState, type FormEvent } from 'react'
+
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import type { FoodLogInput } from '../api/types'
 
 interface FoodLogFormProps {
@@ -98,29 +102,28 @@ export function FoodLogForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-      <div>
-        <label className="label" htmlFor="food_name">
-          Food
-        </label>
-        <input
+      <div className="space-y-1.5">
+        <Label htmlFor="food_name">Food</Label>
+        <Input
           id="food_name"
-          className="input"
           placeholder="e.g. Greek yogurt"
           value={draft.food_name}
           onChange={(e) => set('food_name', e.target.value)}
+          aria-invalid={!!errors.food_name}
           autoComplete="off"
           maxLength={120}
         />
-        {errors.food_name && <p className="field-error">{errors.food_name}</p>}
+        {errors.food_name && (
+          <p className="text-sm font-medium text-destructive">{errors.food_name}</p>
+        )}
       </div>
 
-      <div>
-        <label className="label" htmlFor="serving">
-          Serving <span className="font-medium text-sand-400">(optional)</span>
-        </label>
-        <input
+      <div className="space-y-1.5">
+        <Label htmlFor="serving">
+          Serving <span className="font-normal text-muted-foreground">(optional)</span>
+        </Label>
+        <Input
           id="serving"
-          className="input"
           placeholder="e.g. 1 cup"
           value={draft.serving}
           onChange={(e) => set('serving', e.target.value)}
@@ -131,40 +134,43 @@ export function FoodLogForm({
 
       <div className="grid grid-cols-2 gap-3">
         {NUMERIC_FIELDS.map((f) => (
-          <div key={f.name}>
-            <label className="label" htmlFor={f.name}>
-              {f.label} <span className="font-medium text-sand-400">({f.unit})</span>
-            </label>
-            <input
+          <div key={f.name} className="space-y-1.5">
+            <Label htmlFor={f.name}>
+              {f.label}{' '}
+              <span className="font-normal text-muted-foreground">({f.unit})</span>
+            </Label>
+            <Input
               id={f.name}
-              className="input"
               type="text"
               inputMode="decimal"
               placeholder="0"
               value={draft[f.name]}
               onChange={(e) => set(f.name, e.target.value)}
+              aria-invalid={!!errors[f.name]}
               autoComplete="off"
             />
-            {errors[f.name] && <p className="field-error">{errors[f.name]}</p>}
+            {errors[f.name] && (
+              <p className="text-sm font-medium text-destructive">{errors[f.name]}</p>
+            )}
           </div>
         ))}
       </div>
 
       {serverError && (
-        <p className="field-error" role="alert">
+        <p className="text-sm font-medium text-destructive" role="alert">
           {serverError}
         </p>
       )}
 
-      <div className="flex gap-3">
+      <div className="flex gap-3 pt-1">
         {onCancel && (
-          <button type="button" className="btn-neutral flex-1" onClick={onCancel}>
+          <Button type="button" variant="outline" size="lg" className="flex-1" onClick={onCancel}>
             Cancel
-          </button>
+          </Button>
         )}
-        <button type="submit" className="btn-primary flex-1" disabled={busy}>
+        <Button type="submit" size="lg" className="flex-1" disabled={busy}>
           {busy ? 'Saving…' : submitLabel}
-        </button>
+        </Button>
       </div>
     </form>
   )

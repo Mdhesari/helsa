@@ -1,5 +1,8 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+
+import { Card, CardContent } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import * as api from '../api/client'
 import { errorMessage } from '../api/client'
 import type { FoodLogInput } from '../api/types'
@@ -41,48 +44,52 @@ export function LogFood() {
   const logs = logsQuery.data?.logs ?? []
 
   return (
-    <div className="space-y-4 p-4">
+    <div className="space-y-4 p-4 pt-[max(1.25rem,env(safe-area-inset-top))]">
       <header className="px-1">
-        <h1 className="text-xl font-extrabold text-sand-900">Log food</h1>
-        <p className="text-sm font-semibold text-sand-400">
+        <h1 className="text-2xl font-bold tracking-tight">Log food</h1>
+        <p className="mt-0.5 text-sm text-muted-foreground">
           What did you eat? Every entry keeps your streak alive.
         </p>
       </header>
 
-      <section className="card">
-        {/*
-          FoodLogForm is reusable: a future food-reference picker can pre-fill
-          it via `initialValues` (nutrient snapshot is denormalized per the
-          API contract, so the POST shape stays the same).
-        */}
-        <FoodLogForm
-          key={formKey}
-          submitLabel="Log it"
-          busy={create.isPending}
-          serverError={create.isError ? errorMessage(create.error) : null}
-          onSubmit={(input) => create.mutate(input)}
-        />
-      </section>
+      <Card>
+        <CardContent>
+          {/*
+            FoodLogForm is reusable: a future food-reference picker can pre-fill
+            it via `initialValues` (nutrient snapshot is denormalized per the
+            API contract, so the POST shape stays the same).
+          */}
+          <FoodLogForm
+            key={formKey}
+            submitLabel="Log it"
+            busy={create.isPending}
+            serverError={create.isError ? errorMessage(create.error) : null}
+            onSubmit={(input) => create.mutate(input)}
+          />
+        </CardContent>
+      </Card>
 
-      <section className="space-y-2">
-        <h2 className="px-1 font-extrabold text-sand-800">Today's logs</h2>
+      <section className="space-y-2 pt-2">
+        <h2 className="px-1 font-semibold tracking-tight">Today's logs</h2>
         {logsQuery.isPending ? (
           <div className="space-y-2">
-            <div className="skeleton h-16 w-full" />
-            <div className="skeleton h-16 w-full" />
+            <Skeleton className="h-16 w-full rounded-2xl" />
+            <Skeleton className="h-16 w-full rounded-2xl" />
           </div>
         ) : logsQuery.isError ? (
-          <p className="field-error px-1">{errorMessage(logsQuery.error)}</p>
+          <p className="px-1 text-sm font-medium text-destructive">
+            {errorMessage(logsQuery.error)}
+          </p>
         ) : logs.length > 0 ? (
           <LogList logs={logs} />
         ) : (
-          <div className="card">
+          <Card>
             <EmptyState
               pose="sleep"
               title="Nothing yet today"
               body="Your first log of the day will appear right here."
             />
-          </div>
+          </Card>
         )}
       </section>
     </div>

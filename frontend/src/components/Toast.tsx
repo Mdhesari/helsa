@@ -7,18 +7,21 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { Mascot } from './Mascot'
+import { AlertCircle, Check } from 'lucide-react'
+
 import type { MascotPose } from './mascot-poses'
 
 interface ToastItem {
   id: number
   message: string
-  pose?: MascotPose
   tone: 'default' | 'error'
 }
 
 interface ToastContextValue {
-  /** Show a friendly toast; pass a mascot pose for celebratory cues. */
+  /**
+   * Show a minimal toast. `pose` is accepted for compatibility with
+   * celebratory call sites, but the redesigned toast keeps a quiet look.
+   */
   show: (message: string, opts?: { pose?: MascotPose; tone?: 'default' | 'error' }) => void
 }
 
@@ -30,10 +33,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const show = useCallback<ToastContextValue['show']>((message, opts) => {
     const id = nextId.current++
-    setToasts((t) => [...t, { id, message, pose: opts?.pose, tone: opts?.tone ?? 'default' }])
+    setToasts((t) => [...t, { id, message, tone: opts?.tone ?? 'default' }])
     window.setTimeout(() => {
       setToasts((t) => t.filter((x) => x.id !== id))
-    }, 2800)
+    }, 2600)
   }, [])
 
   const value = useMemo(() => ({ show }), [show])
@@ -48,14 +51,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`animate-toast-in flex max-w-md items-center gap-2 rounded-2xl px-4 py-3 text-sm font-bold text-white shadow-lg ${
-              t.tone === 'error' ? 'bg-danger' : 'bg-sand-800'
+            className={`animate-toast-in flex max-w-md items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium shadow-lg ${
+              t.tone === 'error'
+                ? 'bg-destructive text-destructive-foreground'
+                : 'bg-foreground text-background'
             }`}
           >
-            {t.pose && (
-              <span className="animate-wiggle -my-2 inline-block">
-                <Mascot pose={t.pose} size={40} />
-              </span>
+            {t.tone === 'error' ? (
+              <AlertCircle aria-hidden="true" className="size-4 shrink-0" />
+            ) : (
+              <Check aria-hidden="true" className="size-4 shrink-0" />
             )}
             {t.message}
           </div>
