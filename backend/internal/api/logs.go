@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -23,6 +24,7 @@ type foodLog struct {
 	FatG      float64
 	LoggedAt  int64
 	CreatedAt int64
+	FoodRefID sql.NullInt64 // provenance only; nutrients stay denormalized
 }
 
 // foodLogJSON is the FoodLog shape from the contract.
@@ -36,10 +38,11 @@ type foodLogJSON struct {
 	FatG      float64 `json:"fat_g"`
 	LoggedAt  string  `json:"logged_at"`
 	CreatedAt string  `json:"created_at"`
+	FoodRefID *int64  `json:"food_ref_id"`
 }
 
 func toFoodLogJSON(l foodLog) foodLogJSON {
-	return foodLogJSON{
+	out := foodLogJSON{
 		ID:        l.ID,
 		FoodName:  l.FoodName,
 		Serving:   l.Serving,
@@ -50,18 +53,24 @@ func toFoodLogJSON(l foodLog) foodLogJSON {
 		LoggedAt:  rfc3339(l.LoggedAt),
 		CreatedAt: rfc3339(l.CreatedAt),
 	}
+	if l.FoodRefID.Valid {
+		out.FoodRefID = &l.FoodRefID.Int64
+	}
+	return out
 }
 
 // logPatch is the POST/PUT body: every field optional so PUT can replace
-// only the provided ones.
+// only the provided ones. food_ref_id is a RawMessage to distinguish
+// "absent" (no change) from an explicit null (clear the reference).
 type logPatch struct {
-	FoodName *string  `json:"food_name"`
-	Serving  *string  `json:"serving"`
-	Calories *float64 `json:"calories"`
-	ProteinG *float64 `json:"protein_g"`
-	CarbsG   *float64 `json:"carbs_g"`
-	FatG     *float64 `json:"fat_g"`
-	LoggedAt *string  `json:"logged_at"`
+	FoodName  *string         `json:"food_name"`
+	Serving   *string         `json:"serving"`
+	Calories  *float64        `json:"calories"`
+	ProteinG  *float64        `json:"protein_g"`
+	CarbsG    *float64        `json:"carbs_g"`
+	FatG      *float64        `json:"fat_g"`
+	LoggedAt  *string         `json:"logged_at"`
+	FoodRefID json.RawMessage `json:"food_ref_id"`
 }
 
 // apply merges the patch into l, validating per the contract. Returns a
@@ -101,7 +110,36 @@ func (p logPatch) apply(l *foodLog) error {
 		}
 		l.LoggedAt = t.Unix()
 	}
+	if len(p.FoodRefID) > 0 {
+		if string(p.FoodRefID) == "null" {
+			l.FoodRefID = sql.NullInt64{}
+		} else {
+			var id int64
+			if err := json.Unmarshal(p.FoodRefID, &id); err != nil || id < 1 {
+				return errors.New("food_ref_id must be a positive integer or null")
+			}
+			l.FoodRefID = sql.NullInt64{Int64: id, Valid: true}
+		}
+	}
 	return nil
+}
+
+// validateFoodRef 400s when the patch sets a food_ref_id the caller cannot
+// see; returns false when the response was already written.
+func (s *Server) validateFoodRef(w http.ResponseWriter, r *http.Request, userID int64, l foodLog) bool {
+	if !l.FoodRefID.Valid {
+		return true
+	}
+	visible, err := s.visibleFoodExists(r.Context(), userID, l.FoodRefID.Int64)
+	if err != nil {
+		internalError(w, err)
+		return false
+	}
+	if !visible {
+		badRequest(w, "food_ref_id does not reference a visible food")
+		return false
+	}
+	return true
 }
 
 func (s *Server) handleCreateLog(w http.ResponseWriter, r *http.Request) {
@@ -121,10 +159,13 @@ func (s *Server) handleCreateLog(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, "food_name is required")
 		return
 	}
+	if !s.validateFoodRef(w, r, u.ID, l) {
+		return
+	}
 	res, err := s.db.ExecContext(r.Context(),
-		`INSERT INTO food_logs (user_id, food_name, serving, calories, protein_g, carbs_g, fat_g, logged_at, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		u.ID, l.FoodName, l.Serving, l.Calories, l.ProteinG, l.CarbsG, l.FatG, l.LoggedAt, l.CreatedAt)
+		`INSERT INTO food_logs (user_id, food_name, serving, calories, protein_g, carbs_g, fat_g, logged_at, created_at, food_ref_id)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		u.ID, l.FoodName, l.Serving, l.Calories, l.ProteinG, l.CarbsG, l.FatG, l.LoggedAt, l.CreatedAt, l.FoodRefID)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -194,7 +235,7 @@ func (s *Server) handleListLogs(w http.ResponseWriter, r *http.Request) {
 // ordered by logged_at ascending.
 func (s *Server) queryLogs(ctx context.Context, userID, fromUnix, toUnix int64) ([]foodLog, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, food_name, serving, calories, protein_g, carbs_g, fat_g, logged_at, created_at
+		`SELECT id, food_name, serving, calories, protein_g, carbs_g, fat_g, logged_at, created_at, food_ref_id
 		 FROM food_logs WHERE user_id = ? AND logged_at >= ? AND logged_at < ?
 		 ORDER BY logged_at ASC, id ASC`, userID, fromUnix, toUnix)
 	if err != nil {
@@ -204,7 +245,7 @@ func (s *Server) queryLogs(ctx context.Context, userID, fromUnix, toUnix int64) 
 	var out []foodLog
 	for rows.Next() {
 		var l foodLog
-		if err := rows.Scan(&l.ID, &l.FoodName, &l.Serving, &l.Calories, &l.ProteinG, &l.CarbsG, &l.FatG, &l.LoggedAt, &l.CreatedAt); err != nil {
+		if err := rows.Scan(&l.ID, &l.FoodName, &l.Serving, &l.Calories, &l.ProteinG, &l.CarbsG, &l.FatG, &l.LoggedAt, &l.CreatedAt, &l.FoodRefID); err != nil {
 			return nil, err
 		}
 		out = append(out, l)
@@ -217,9 +258,9 @@ func (s *Server) queryLogs(ctx context.Context, userID, fromUnix, toUnix int64) 
 func (s *Server) getOwnedLog(ctx context.Context, userID, logID int64) (foodLog, error) {
 	var l foodLog
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, food_name, serving, calories, protein_g, carbs_g, fat_g, logged_at, created_at
+		`SELECT id, food_name, serving, calories, protein_g, carbs_g, fat_g, logged_at, created_at, food_ref_id
 		 FROM food_logs WHERE id = ? AND user_id = ?`, logID, userID,
-	).Scan(&l.ID, &l.FoodName, &l.Serving, &l.Calories, &l.ProteinG, &l.CarbsG, &l.FatG, &l.LoggedAt, &l.CreatedAt)
+	).Scan(&l.ID, &l.FoodName, &l.Serving, &l.Calories, &l.ProteinG, &l.CarbsG, &l.FatG, &l.LoggedAt, &l.CreatedAt, &l.FoodRefID)
 	return l, err
 }
 
@@ -253,10 +294,13 @@ func (s *Server) handleUpdateLog(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, err.Error())
 		return
 	}
+	if !s.validateFoodRef(w, r, u.ID, l) {
+		return
+	}
 	if _, err := s.db.ExecContext(r.Context(),
-		`UPDATE food_logs SET food_name = ?, serving = ?, calories = ?, protein_g = ?, carbs_g = ?, fat_g = ?, logged_at = ?
+		`UPDATE food_logs SET food_name = ?, serving = ?, calories = ?, protein_g = ?, carbs_g = ?, fat_g = ?, logged_at = ?, food_ref_id = ?
 		 WHERE id = ? AND user_id = ?`,
-		l.FoodName, l.Serving, l.Calories, l.ProteinG, l.CarbsG, l.FatG, l.LoggedAt, l.ID, u.ID); err != nil {
+		l.FoodName, l.Serving, l.Calories, l.ProteinG, l.CarbsG, l.FatG, l.LoggedAt, l.FoodRefID, l.ID, u.ID); err != nil {
 		internalError(w, err)
 		return
 	}

@@ -47,6 +47,13 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/me/profile", protect(s.handleGetProfile))
 	mux.Handle("PUT /api/v1/me/profile", protect(s.handleUpdateProfile))
 
+	mux.Handle("GET /api/v1/foods", protect(s.handleSearchFoods))
+	mux.Handle("GET /api/v1/foods/suggestions", protect(s.handleFoodSuggestions))
+	mux.Handle("GET /api/v1/foods/{id}", protect(s.handleGetFood))
+	mux.Handle("POST /api/v1/foods", protect(s.handleCreateFood))
+	mux.Handle("PUT /api/v1/foods/{id}/favorite", protect(s.handleAddFavorite))
+	mux.Handle("DELETE /api/v1/foods/{id}/favorite", protect(s.handleRemoveFavorite))
+
 	mux.Handle("POST /api/v1/logs", protect(s.handleCreateLog))
 	mux.Handle("GET /api/v1/logs", protect(s.handleListLogs))
 	mux.Handle("PUT /api/v1/logs/{id}", protect(s.handleUpdateLog))

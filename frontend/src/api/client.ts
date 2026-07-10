@@ -4,9 +4,13 @@ import type {
   AuthResponse,
   ChangePasswordRequest,
   ChangePasswordResponse,
+  CustomFoodInput,
   DashboardResponse,
+  Food,
   FoodLog,
   FoodLogInput,
+  FoodSuggestionsResponse,
+  FoodsResponse,
   InsightResponse,
   LoginRequest,
   LogsResponse,
@@ -198,6 +202,34 @@ export function updateLog(
 
 export function deleteLog(id: number): Promise<void> {
   return request<void>(`/logs/${id}`, { method: 'DELETE' })
+}
+
+// ---------- Foods ----------
+
+export function searchFoods(q: string, limit?: number): Promise<FoodsResponse> {
+  const params = new URLSearchParams({ q })
+  if (limit) params.set('limit', String(limit))
+  return request<FoodsResponse>(`/foods?${params.toString()}`)
+}
+
+export function getFoodSuggestions(): Promise<FoodSuggestionsResponse> {
+  return request<FoodSuggestionsResponse>('/foods/suggestions')
+}
+
+export function getFood(id: number): Promise<Food> {
+  return request<Food>(`/foods/${id}`)
+}
+
+export function createFood(input: CustomFoodInput): Promise<Food> {
+  return request<Food>('/foods', { method: 'POST', body: input })
+}
+
+export function favoriteFood(id: number): Promise<void> {
+  return request<void>(`/foods/${id}/favorite`, { method: 'PUT' })
+}
+
+export function unfavoriteFood(id: number): Promise<void> {
+  return request<void>(`/foods/${id}/favorite`, { method: 'DELETE' })
 }
 
 // ---------- Dashboard / Reports ----------

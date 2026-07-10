@@ -60,6 +60,52 @@ export interface FoodLog {
   fat_g: number
   logged_at: string // RFC3339 UTC
   created_at: string // RFC3339 UTC
+  /** Reference food that pre-filled the snapshot; null for manual entries. */
+  food_ref_id: number | null
+}
+
+export interface FoodServing {
+  id: number
+  label: string
+  /** Null only for per-serving custom foods. */
+  grams: number | null
+  is_default: boolean
+}
+
+/** Nutrients are per nutrient_basis: "100g" (seeded) or "serving" (custom). */
+export interface Food {
+  id: number
+  name: string
+  category: string
+  is_custom: boolean
+  nutrient_basis: '100g' | 'serving'
+  calories: number
+  protein_g: number
+  carbs_g: number
+  fat_g: number
+  is_favorite: boolean
+  /** Default serving first; never empty. */
+  servings: FoodServing[]
+}
+
+export interface FoodsResponse {
+  foods: Food[]
+}
+
+export interface FoodSuggestionsResponse {
+  recent: Food[]
+  favorites: Food[]
+  popular: Food[]
+}
+
+/** Nutrients are per the named serving. */
+export interface CustomFoodInput {
+  name: string
+  serving_label?: string
+  calories: number
+  protein_g: number
+  carbs_g: number
+  fat_g: number
 }
 
 /** Also used for Targets and Averages. */
@@ -132,6 +178,8 @@ export interface FoodLogInput {
   fat_g: number
   /** Optional; server defaults to now. */
   logged_at?: string
+  /** Optional provenance link; explicit null clears it on PUT. */
+  food_ref_id?: number | null
 }
 
 export interface LogsResponse {
