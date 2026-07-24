@@ -46,6 +46,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PUT /api/v1/me/password", protect(s.handleChangePassword))
 	mux.Handle("GET /api/v1/me/profile", protect(s.handleGetProfile))
 	mux.Handle("PUT /api/v1/me/profile", protect(s.handleUpdateProfile))
+	mux.Handle("GET /api/v1/me/plan", protect(s.handleGetPlan))
 
 	mux.Handle("GET /api/v1/foods", protect(s.handleSearchFoods))
 	mux.Handle("GET /api/v1/foods/suggestions", protect(s.handleFoodSuggestions))
@@ -58,6 +59,27 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/logs", protect(s.handleListLogs))
 	mux.Handle("PUT /api/v1/logs/{id}", protect(s.handleUpdateLog))
 	mux.Handle("DELETE /api/v1/logs/{id}", protect(s.handleDeleteLog))
+
+	mux.Handle("POST /api/v1/workouts", protect(s.handleCreateWorkout))
+	mux.Handle("GET /api/v1/workouts", protect(s.handleListWorkouts))
+	mux.Handle("PUT /api/v1/workouts/{id}", protect(s.handleUpdateWorkout))
+	mux.Handle("DELETE /api/v1/workouts/{id}", protect(s.handleDeleteWorkout))
+
+	mux.Handle("POST /api/v1/weights", protect(s.handleCreateWeight))
+	mux.Handle("GET /api/v1/weights", protect(s.handleListWeights))
+	mux.Handle("DELETE /api/v1/weights/{id}", protect(s.handleDeleteWeight))
+
+	mux.Handle("GET /api/v1/habits", protect(s.handleListHabits))
+	mux.Handle("POST /api/v1/habits", protect(s.handleCreateHabit))
+	mux.Handle("PUT /api/v1/habits/{id}", protect(s.handleUpdateHabit))
+	mux.Handle("DELETE /api/v1/habits/{id}", protect(s.handleDeleteHabit))
+	mux.Handle("POST /api/v1/habits/{id}/logs", protect(s.handleCreateHabitLog))
+	mux.Handle("GET /api/v1/habits/{id}/logs", protect(s.handleListHabitLogs))
+	mux.Handle("DELETE /api/v1/habits/{id}/logs/{logId}", protect(s.handleDeleteHabitLog))
+
+	mux.Handle("GET /api/v1/diary", protect(s.handleGetDiary))
+	mux.Handle("PUT /api/v1/diary/{date}", protect(s.handlePutDiary))
+	mux.Handle("DELETE /api/v1/diary/{date}", protect(s.handleDeleteDiary))
 
 	mux.Handle("GET /api/v1/dashboard", protect(s.handleDashboard))
 	mux.Handle("GET /api/v1/reports", protect(s.handleReports))

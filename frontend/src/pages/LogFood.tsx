@@ -25,6 +25,7 @@ import { FoodSearchInput } from '../components/foods/FoodSearchInput'
 import { FoodSuggestions } from '../components/foods/FoodSuggestions'
 import { FoodResultList } from '../components/foods/FoodResultList'
 import { FoodDetailSheet } from '../components/foods/FoodDetailSheet'
+import { AppleIllustration } from '../assets/illustrations'
 
 const CHEERS = [
   'Logged! Nice one.',
@@ -60,7 +61,7 @@ export function LogFood() {
 
   function celebrate() {
     invalidateFoodData(qc)
-    toast.show(CHEERS[Math.floor(Math.random() * CHEERS.length)], { pose: 'cheer' })
+    toast.show(CHEERS[Math.floor(Math.random() * CHEERS.length)])
   }
 
   const logFood = useMutation({
@@ -126,7 +127,7 @@ export function LogFood() {
           ) : (
             <Card>
               <EmptyState
-                pose="sleep"
+                illustration={<AppleIllustration size={72} />}
                 title={`No match for “${debouncedQuery}”`}
                 body="Can't find it? Create it once and it stays searchable."
               />
@@ -162,7 +163,7 @@ export function LogFood() {
         ) : (
           <Card>
             <EmptyState
-              pose="sleep"
+              illustration={<AppleIllustration size={72} />}
               title="Nothing yet today"
               body="Your first log of the day will appear right here."
             />

@@ -7,6 +7,7 @@ import { errorMessage } from '../../api/client'
 import type { Food } from '../../api/types'
 import { qk } from '../../lib/queries'
 import { EmptyState } from '../EmptyState'
+import { AppleIllustration } from '../../assets/illustrations'
 import { FoodResultList } from './FoodResultList'
 
 interface FoodSuggestionsProps {
@@ -49,7 +50,7 @@ export function FoodSuggestions({ onSelect }: FoodSuggestionsProps) {
     return (
       <Card>
         <EmptyState
-          pose="sleep"
+          illustration={<AppleIllustration size={72} />}
           title="Nothing here yet"
           body="Search for a food above, or create a custom one below."
         />

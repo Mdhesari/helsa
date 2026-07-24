@@ -41,6 +41,18 @@ export function stepDate(dateStr: string, period: ReportPeriod, dir: 1 | -1): st
   }
 }
 
+/** Whole years between two YYYY-MM-DD dates (birthday not yet passed → −1). */
+export function yearsBetween(fromStr: string, toStr: string): number {
+  const from = parseDateStr(fromStr)
+  const to = parseDateStr(toStr)
+  let years = to.getFullYear() - from.getFullYear()
+  const beforeBirthday =
+    to.getMonth() < from.getMonth() ||
+    (to.getMonth() === from.getMonth() && to.getDate() < from.getDate())
+  if (beforeBirthday) years -= 1
+  return years
+}
+
 const SHORT: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }
 
 export function formatDay(dateStr: string): string {
@@ -48,6 +60,19 @@ export function formatDay(dateStr: string): string {
     weekday: 'short',
     ...SHORT,
   })
+}
+
+/** "October 10" — used for goal headlines and projected dates. */
+export function formatLongDate(dateStr: string): string {
+  return parseDateStr(dateStr).toLocaleDateString(undefined, {
+    month: 'long',
+    day: 'numeric',
+  })
+}
+
+/** "Oct 10" without weekday. */
+export function formatShortDate(dateStr: string): string {
+  return parseDateStr(dateStr).toLocaleDateString(undefined, SHORT)
 }
 
 export function formatRange(start: string, end: string): string {

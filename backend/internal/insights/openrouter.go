@@ -13,10 +13,12 @@ import (
 
 const openRouterURL = "https://openrouter.ai/api/v1/chat/completions"
 
-const systemPrompt = "You are a nutrition-tracking assistant for the Helsa diet app. " +
-	"Given aggregated food-log statistics, write roughly 120 words of general nutrition " +
-	"pattern observations: how average intake compared to targets, the most notable " +
-	"deficiency or excess, logging consistency, and gentle encouragement. " +
+const systemPrompt = "You are a health-tracking assistant for the Helsa app. " +
+	"Given aggregated statistics — food logs, workouts, weight measurements and habit logs — " +
+	"write roughly 120 words of general pattern observations: how average intake compared to " +
+	"the plan targets, the most notable deficiency or excess, workout activity and calories " +
+	"burned, the weight trend over the period, habit adherence versus daily targets, tracking " +
+	"consistency, and gentle encouragement. " +
 	"Strictly avoid medical diagnosis, disease-risk claims, or medical advice of any kind. " +
 	"Do not prescribe supplements or treatments. Plain text only, no markdown."
 
@@ -107,15 +109,18 @@ func (p *OpenRouterProvider) GenerateInsight(ctx context.Context, stats ReportSt
 }
 
 // statsPrompt renders the stats as a compact JSON document for the model.
+// Buckets carry burned_calories/workout_count; weights are the per-day trend
+// and habits the per-day adherence series.
 func statsPrompt(stats ReportStats) string {
 	doc := map[string]any{
 		"period":                    stats.Period,
 		"start_date":                stats.StartDate,
 		"end_date":                  stats.EndDate,
 		"timezone":                  stats.Timezone,
-		"profile_complete":          stats.ProfileComplete,
-		"targets":                   stats.Targets,
+		"plan":                      stats.Plan,
 		"daily_buckets":             stats.Buckets,
+		"weight_trend":              stats.Weights,
+		"habit_series":              stats.Habits,
 		"averages_over_logged_days": stats.Averages,
 		"deltas_pct_vs_target":      stats.Deltas,
 		"streak":                    map[string]int{"current_days": stats.Streak.CurrentDays, "longest_days": stats.Streak.LongestDays},
@@ -124,7 +129,7 @@ func statsPrompt(stats ReportStats) string {
 	if err != nil {
 		return fmt.Sprintf("%+v", stats)
 	}
-	return "Here are the user's aggregated food-log statistics:\n" + string(b)
+	return "Here are the user's aggregated tracking statistics:\n" + string(b)
 }
 
 func truncate(s string, n int) string {

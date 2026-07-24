@@ -181,44 +181,10 @@ func (s *Server) handleCreateLog(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListLogs(w http.ResponseWriter, r *http.Request) {
 	u, _ := auth.UserFromContext(r.Context())
 	loc := userLocation(u)
-	q := r.URL.Query()
-
-	parseDay := func(v string) (time.Time, error) {
-		return time.ParseInLocation("2006-01-02", v, loc)
+	startDay, endDay, ok := s.dayRangeParams(w, r, loc)
+	if !ok {
+		return
 	}
-
-	// Whole local days, inclusive. `date` wins if both given; default today.
-	var startDay, endDay time.Time
-	switch {
-	case q.Get("date") != "":
-		d, err := parseDay(q.Get("date"))
-		if err != nil {
-			badRequest(w, "date must be YYYY-MM-DD")
-			return
-		}
-		startDay, endDay = d, d
-	case q.Get("from") != "" || q.Get("to") != "":
-		if q.Get("from") == "" || q.Get("to") == "" {
-			badRequest(w, "both from and to are required for a range")
-			return
-		}
-		from, err1 := parseDay(q.Get("from"))
-		to, err2 := parseDay(q.Get("to"))
-		if err1 != nil || err2 != nil {
-			badRequest(w, "from and to must be YYYY-MM-DD")
-			return
-		}
-		if to.Before(from) {
-			badRequest(w, "to must not be before from")
-			return
-		}
-		startDay, endDay = from, to
-	default:
-		now := s.now().In(loc)
-		startDay = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
-		endDay = startDay
-	}
-
 	logs, err := s.queryLogs(r.Context(), u.ID, startDay.Unix(), endDay.AddDate(0, 0, 1).Unix())
 	if err != nil {
 		internalError(w, err)

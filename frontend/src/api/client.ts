@@ -6,21 +6,39 @@ import type {
   ChangePasswordResponse,
   CustomFoodInput,
   DashboardResponse,
+  DiaryDayResponse,
+  DiaryEntry,
+  DiaryRangeResponse,
+  DiaryUpsertRequest,
   Food,
   FoodLog,
   FoodLogInput,
   FoodSuggestionsResponse,
   FoodsResponse,
+  Habit,
+  HabitInput,
+  HabitLog,
+  HabitLogInput,
+  HabitLogsResponse,
+  HabitsResponse,
   InsightResponse,
   LoginRequest,
   LogsResponse,
+  Plan,
   Profile,
   RegisterRequest,
   ReportPeriod,
   ReportResponse,
+  UpdateHabitRequest,
   UpdateMeRequest,
   UpdateProfileRequest,
   User,
+  WeightEntry,
+  WeightInput,
+  WeightsResponse,
+  Workout,
+  WorkoutInput,
+  WorkoutsResponse,
 } from './types'
 
 const BASE = '/api/v1'
@@ -127,6 +145,23 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   return (await res.json()) as T
 }
 
+// ---------- Query-string helpers ----------
+
+export type DayQuery = { date: string } | { from: string; to: string } | undefined
+
+function dayQueryString(query: DayQuery): string {
+  const params = new URLSearchParams()
+  if (query) {
+    if ('date' in query) params.set('date', query.date)
+    else {
+      params.set('from', query.from)
+      params.set('to', query.to)
+    }
+  }
+  const qs = params.toString()
+  return qs ? `?${qs}` : ''
+}
+
 // ---------- Auth ----------
 
 export function register(req: RegisterRequest): Promise<AuthResponse> {
@@ -172,25 +207,18 @@ export function updateProfile(req: UpdateProfileRequest): Promise<Profile> {
   return request<Profile>('/me/profile', { method: 'PUT', body: req })
 }
 
-// ---------- Logs ----------
+export function getPlan(): Promise<Plan> {
+  return request<Plan>('/me/plan')
+}
+
+// ---------- Food logs ----------
 
 export function createLog(input: FoodLogInput): Promise<FoodLog> {
   return request<FoodLog>('/logs', { method: 'POST', body: input })
 }
 
-export type LogsQuery = { date: string } | { from: string; to: string } | undefined
-
-export function getLogs(query?: LogsQuery): Promise<LogsResponse> {
-  const params = new URLSearchParams()
-  if (query) {
-    if ('date' in query) params.set('date', query.date)
-    else {
-      params.set('from', query.from)
-      params.set('to', query.to)
-    }
-  }
-  const qs = params.toString()
-  return request<LogsResponse>(`/logs${qs ? `?${qs}` : ''}`)
+export function getLogs(query?: DayQuery): Promise<LogsResponse> {
+  return request<LogsResponse>(`/logs${dayQueryString(query)}`)
 }
 
 export function updateLog(
@@ -230,6 +258,131 @@ export function favoriteFood(id: number): Promise<void> {
 
 export function unfavoriteFood(id: number): Promise<void> {
   return request<void>(`/foods/${id}/favorite`, { method: 'DELETE' })
+}
+
+// ---------- Workouts ----------
+
+export function createWorkout(input: WorkoutInput): Promise<Workout> {
+  return request<Workout>('/workouts', { method: 'POST', body: input })
+}
+
+export function getWorkouts(query?: DayQuery): Promise<WorkoutsResponse> {
+  return request<WorkoutsResponse>(`/workouts${dayQueryString(query)}`)
+}
+
+export function updateWorkout(
+  id: number,
+  input: Partial<WorkoutInput>,
+): Promise<Workout> {
+  return request<Workout>(`/workouts/${id}`, { method: 'PUT', body: input })
+}
+
+export function deleteWorkout(id: number): Promise<void> {
+  return request<void>(`/workouts/${id}`, { method: 'DELETE' })
+}
+
+// ---------- Weights ----------
+
+export function createWeight(input: WeightInput): Promise<WeightEntry> {
+  return request<WeightEntry>('/weights', { method: 'POST', body: input })
+}
+
+export function getWeights(range?: {
+  from?: string
+  to?: string
+}): Promise<WeightsResponse> {
+  const params = new URLSearchParams()
+  if (range?.from) params.set('from', range.from)
+  if (range?.to) params.set('to', range.to)
+  const qs = params.toString()
+  return request<WeightsResponse>(`/weights${qs ? `?${qs}` : ''}`)
+}
+
+export function deleteWeight(id: number): Promise<void> {
+  return request<void>(`/weights/${id}`, { method: 'DELETE' })
+}
+
+// ---------- Habits ----------
+
+export function getHabits(includeArchived = false): Promise<HabitsResponse> {
+  const qs = includeArchived ? '?include_archived=true' : ''
+  return request<HabitsResponse>(`/habits${qs}`)
+}
+
+export function createHabit(input: HabitInput): Promise<Habit> {
+  return request<Habit>('/habits', { method: 'POST', body: input })
+}
+
+export function updateHabit(
+  id: number,
+  input: UpdateHabitRequest,
+): Promise<Habit> {
+  return request<Habit>(`/habits/${id}`, { method: 'PUT', body: input })
+}
+
+/** Archives (soft delete); logs are preserved. Idempotent. */
+export function archiveHabit(id: number): Promise<void> {
+  return request<void>(`/habits/${id}`, { method: 'DELETE' })
+}
+
+export function createHabitLog(
+  habitId: number,
+  input: HabitLogInput = {},
+): Promise<HabitLog> {
+  return request<HabitLog>(`/habits/${habitId}/logs`, {
+    method: 'POST',
+    body: input,
+  })
+}
+
+export function getHabitLogs(
+  habitId: number,
+  range?: { from?: string; to?: string },
+): Promise<HabitLogsResponse> {
+  const params = new URLSearchParams()
+  if (range?.from) params.set('from', range.from)
+  if (range?.to) params.set('to', range.to)
+  const qs = params.toString()
+  return request<HabitLogsResponse>(
+    `/habits/${habitId}/logs${qs ? `?${qs}` : ''}`,
+  )
+}
+
+/** The undo affordance for habit +1. */
+export function deleteHabitLog(habitId: number, logId: number): Promise<void> {
+  return request<void>(`/habits/${habitId}/logs/${logId}`, { method: 'DELETE' })
+}
+
+// ---------- Diary ----------
+
+export function getDiaryDay(date?: string): Promise<DiaryDayResponse> {
+  const qs = date ? `?date=${date}` : ''
+  return request<DiaryDayResponse>(`/diary${qs}`)
+}
+
+export function getDiaryRange(
+  from: string,
+  to: string,
+): Promise<DiaryRangeResponse> {
+  return request<DiaryRangeResponse>(`/diary?from=${from}&to=${to}`)
+}
+
+/**
+ * Upsert; at least one key required. Returns the entry, or undefined when the
+ * server deleted an all-null entry (204).
+ */
+export function upsertDiary(
+  date: string,
+  req: DiaryUpsertRequest,
+): Promise<DiaryEntry | undefined> {
+  return request<DiaryEntry | undefined>(`/diary/${date}`, {
+    method: 'PUT',
+    body: req,
+  })
+}
+
+export function deleteDiary(date: string): Promise<void> {
+  return request<void>(`/diary/${date}`, { method: 'DELETE' })
 }
 
 // ---------- Dashboard / Reports ----------
@@ -275,7 +428,7 @@ export async function exportXlsx(): Promise<void> {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = 'helsa-food-logs.xlsx'
+  a.download = 'helsa-export.xlsx'
   document.body.appendChild(a)
   a.click()
   a.remove()

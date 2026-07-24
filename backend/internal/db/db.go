@@ -27,6 +27,14 @@ func Open(path string) (*sql.DB, error) {
 		sqlDB.Close()
 		return nil, fmt.Errorf("ping sqlite: %w", err)
 	}
+	// v1 -> v2: the age-based profiles table is destructively rebuilt (dev
+	// data per the contract). Must run BEFORE the schema so the CREATE IF NOT
+	// EXISTS recreates it with the v2 shape. users, food_ref and food_logs
+	// are untouched.
+	if err := dropLegacyProfiles(sqlDB); err != nil {
+		sqlDB.Close()
+		return nil, fmt.Errorf("migrate profiles: %w", err)
+	}
 	if _, err := sqlDB.Exec(schema); err != nil {
 		sqlDB.Close()
 		return nil, fmt.Errorf("apply schema: %w", err)
@@ -48,6 +56,22 @@ func Open(path string) (*sql.DB, error) {
 		return nil, fmt.Errorf("seed food data: %w", err)
 	}
 	return sqlDB, nil
+}
+
+// dropLegacyProfiles removes a v1 profiles table (recognized by its "age"
+// column, absent in v2) so the schema recreates it with the v2 shape.
+func dropLegacyProfiles(db *sql.DB) error {
+	var n int
+	if err := db.QueryRow(
+		`SELECT count(*) FROM pragma_table_info('profiles') WHERE name = 'age'`,
+	).Scan(&n); err != nil {
+		return err
+	}
+	if n == 0 {
+		return nil
+	}
+	_, err := db.Exec(`DROP TABLE profiles`)
+	return err
 }
 
 // ensureColumn adds a column when missing (SQLite has no ADD COLUMN IF NOT

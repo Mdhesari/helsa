@@ -2,18 +2,19 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "backend",
+      "name": "helsa-backend",
       "runtimeExecutable": "sh",
-      "runtimeArgs": ["-c", "cd backend && PORT=8790 go run ./cmd/server"],
+      "runtimeArgs": ["-c", "PORT=8790 go run ./cmd/server"],
       "port": 8790,
-      "autoPort": false
+      "autoPort": false,
+      "cwd": "backend"
     },
     {
-      "name": "frontend",
-      "runtimeExecutable": "sh",
-      "runtimeArgs": ["-c", "cd frontend && BACKEND_PORT=8790 npm run dev -- --port ${PORT:-5173} --strictPort"],
+      "name": "helsa-frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
       "port": 5173,
-      "autoPort": true
+      "cwd": "frontend"
     }
   ]
 }
