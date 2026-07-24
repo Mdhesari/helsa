@@ -1,312 +1,240 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Download, LogOut } from 'lucide-react'
+import { Archive, Flame, LogOut, Pencil, Plus, Target } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { NativeSelect } from '@/components/ui/select'
+import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import * as api from '../api/client'
-import { errorMessage, isApiError } from '../api/client'
-import type { ActivityLevel, Profile as ProfileShape, Sex } from '../api/types'
+import { errorMessage } from '../api/client'
+import type { Profile as ProfileT, UpdateProfileRequest } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { invalidateProfileData, qk } from '../lib/queries'
+import { invalidateHabitData, invalidateProfileData, qk } from '../lib/queries'
+import { formatLongDate } from '../lib/date'
+import {
+  BirthDatePicker,
+  DietPicker,
+  GOAL_LABELS,
+  GoalPicker,
+  HeightPicker,
+  PacePicker,
+  SexPicker,
+  UnitToggle,
+  WeightField,
+  WorkoutsPicker,
+} from '../components/plan/pickers'
+import { RECOMMENDED_PACE } from '../lib/plan'
+import type { UnitSystem } from '../components/onboarding/wizardState'
+import { AddHabitDialog, HABIT_ICONS } from '../components/habits/AddHabitDialog'
 import { useToast } from '../components/Toast'
 
-const ACTIVITY_LEVELS: { value: ActivityLevel; label: string }[] = [
-  { value: 'sedentary', label: 'Sedentary (little exercise)' },
-  { value: 'light', label: 'Light (1-3 days/week)' },
-  { value: 'moderate', label: 'Moderate (3-5 days/week)' },
-  { value: 'active', label: 'Active (6-7 days/week)' },
-  { value: 'very_active', label: 'Very active (physical job)' },
-]
-
-function timezoneOptions(current: string): string[] {
-  const zones =
-    typeof Intl.supportedValuesOf === 'function'
-      ? Intl.supportedValuesOf('timeZone')
-      : ['UTC']
-  return zones.includes(current) ? zones : [current, ...zones]
+/** Editable copy of the profile inside the edit-plan sheet. */
+interface PlanDraft {
+  sex: ProfileT['sex']
+  activity_level: ProfileT['activity_level']
+  birth_date: ProfileT['birth_date']
+  height_cm: ProfileT['height_cm']
+  weight_kg: ProfileT['weight_kg']
+  goal: ProfileT['goal']
+  target_weight_kg: ProfileT['target_weight_kg']
+  pace_kg_per_week: number
+  diet: ProfileT['diet']
 }
 
-// ---------- Account ----------
-
-function AccountCard() {
-  const { user, setUser } = useAuth()
-  const toast = useToast()
-  const [fullName, setFullName] = useState(user?.full_name ?? '')
-  const [timezone, setTimezone] = useState(user?.timezone ?? 'UTC')
-  const zones = useMemo(() => timezoneOptions(timezone), []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const save = useMutation({
-    mutationFn: () => api.updateMe({ full_name: fullName.trim(), timezone }),
-    onSuccess: (next) => {
-      setUser(next)
-      toast.show('Account updated!', { pose: 'happy' })
-    },
-  })
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Account</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-1.5">
-          <Label htmlFor="acc_name">Full name</Label>
-          <Input
-            id="acc_name"
-            autoComplete="name"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="acc_tz">Timezone</Label>
-          <NativeSelect
-            id="acc_tz"
-            value={timezone}
-            onChange={(e) => setTimezone(e.target.value)}
-          >
-            {zones.map((z) => (
-              <option key={z} value={z}>
-                {z}
-              </option>
-            ))}
-          </NativeSelect>
-          <p className="text-xs text-muted-foreground">
-            Your days, streaks and reports follow this timezone.
-          </p>
-        </div>
-        {save.isError && (
-          <p className="text-sm font-medium text-destructive" role="alert">
-            {errorMessage(save.error)}
-          </p>
-        )}
-        <Button
-          size="lg"
-          className="w-full"
-          disabled={save.isPending || !fullName.trim()}
-          onClick={() => save.mutate()}
-        >
-          {save.isPending ? 'Saving…' : 'Save account'}
-        </Button>
-      </CardContent>
-    </Card>
-  )
+function draftFromProfile(p: ProfileT): PlanDraft {
+  return {
+    sex: p.sex,
+    activity_level: p.activity_level,
+    birth_date: p.birth_date,
+    height_cm: p.height_cm,
+    weight_kg: p.weight_kg,
+    goal: p.goal,
+    target_weight_kg: p.target_weight_kg,
+    pace_kg_per_week: p.pace_kg_per_week ?? RECOMMENDED_PACE,
+    diet: p.diet,
+  }
 }
 
-// ---------- Biometrics ----------
-
-function BiometricsForm({ profile }: { profile: ProfileShape }) {
+function EditPlanSheet({
+  open,
+  profile,
+  onClose,
+}: {
+  open: boolean
+  profile: ProfileT
+  onClose: () => void
+}) {
   const qc = useQueryClient()
   const toast = useToast()
-  const [age, setAge] = useState(profile.age === null ? '' : String(profile.age))
-  const [sex, setSex] = useState<'' | Sex>(profile.sex ?? '')
-  const [weight, setWeight] = useState(
-    profile.weight_kg === null ? '' : String(profile.weight_kg),
-  )
-  const [height, setHeight] = useState(
-    profile.height_cm === null ? '' : String(profile.height_cm),
-  )
-  const [activity, setActivity] = useState<'' | ActivityLevel>(
-    profile.activity_level ?? '',
-  )
-  const [validationError, setValidationError] = useState<string | null>(null)
-
-  const save = useMutation({
-    mutationFn: api.updateProfile,
-    onSuccess: () => {
-      invalidateProfileData(qc)
-      toast.show('Profile saved — targets updated!', { pose: 'cheer' })
-    },
-  })
-
-  function numOrNull(s: string, int = false): number | null | undefined {
-    if (s.trim() === '') return null
-    const n = Number(s)
-    if (!Number.isFinite(n)) return undefined // invalid
-    return int ? Math.round(n) : n
+  const [unit, setUnit] = useState<UnitSystem>('metric')
+  const [draft, setDraft] = useState<PlanDraft>(() => draftFromProfile(profile))
+  // Re-seed whenever the sheet re-opens.
+  const [seenOpen, setSeenOpen] = useState(open)
+  if (open !== seenOpen) {
+    setSeenOpen(open)
+    if (open) setDraft(draftFromProfile(profile))
   }
 
-  function handleSubmit(e: FormEvent) {
-    e.preventDefault()
-    setValidationError(null)
-    const ageN = numOrNull(age, true)
-    const weightN = numOrNull(weight)
-    const heightN = numOrNull(height)
-    if (ageN === undefined || weightN === undefined || heightN === undefined) {
-      setValidationError('Age, weight and height must be numbers (or left empty).')
-      return
-    }
-    // Any subset allowed; explicit null clears a field (per contract).
+  const save = useMutation({
+    mutationFn: (req: UpdateProfileRequest) => api.updateProfile(req),
+    onSuccess: () => {
+      invalidateProfileData(qc)
+      toast.show('Plan updated')
+      onClose()
+    },
+    onError: (e) => toast.show(errorMessage(e), { tone: 'error' }),
+  })
+
+  function patch(p: Partial<PlanDraft>) {
+    setDraft((d) => ({ ...d, ...p }))
+  }
+
+  function submit() {
+    const maintain = draft.goal === 'maintain'
     save.mutate({
-      age: ageN,
-      sex: sex === '' ? null : sex,
-      weight_kg: weightN,
-      height_cm: heightN,
-      activity_level: activity === '' ? null : activity,
+      sex: draft.sex,
+      activity_level: draft.activity_level,
+      birth_date: draft.birth_date,
+      height_cm: draft.height_cm,
+      weight_kg: draft.weight_kg,
+      goal: draft.goal,
+      target_weight_kg: maintain ? null : draft.target_weight_kg,
+      pace_kg_per_week: maintain ? null : draft.pace_kg_per_week,
+      diet: draft.diet,
     })
   }
 
   return (
-    <form className="space-y-4" onSubmit={handleSubmit} noValidate>
-      <p className="text-sm text-muted-foreground">
-        All optional — fill in all five and Helsa computes personal calorie and macro
-        targets for you.
-      </p>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="bio_age">Age</Label>
-          <Input
-            id="bio_age"
-            type="text"
-            inputMode="numeric"
-            placeholder="—"
-            value={age}
-            onChange={(e) => setAge(e.target.value)}
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent
+        aria-describedby={undefined}
+        className="max-h-[92dvh] overflow-y-auto"
+      >
+        <DialogHeader>
+          <DialogTitle>Edit your plan</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-6">
+          <UnitToggle unit={unit} onChange={setUnit} />
+
+          <section className="space-y-2">
+            <h3 className="text-sm font-semibold text-muted-foreground">About you</h3>
+            <SexPicker value={draft.sex} onChange={(sex) => patch({ sex })} />
+          </section>
+
+          <BirthDatePicker
+            value={draft.birth_date}
+            onChange={(birth_date) => patch({ birth_date })}
           />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="bio_sex">Sex</Label>
-          <NativeSelect
-            id="bio_sex"
-            value={sex}
-            onChange={(e) => setSex(e.target.value as '' | Sex)}
-          >
-            <option value="">—</option>
-            <option value="female">Female</option>
-            <option value="male">Male</option>
-          </NativeSelect>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="bio_weight">Weight (kg)</Label>
-          <Input
-            id="bio_weight"
-            type="text"
-            inputMode="decimal"
-            placeholder="—"
-            value={weight}
-            onChange={(e) => setWeight(e.target.value)}
+
+          <HeightPicker
+            heightCm={draft.height_cm}
+            unit={unit}
+            onChange={(height_cm) => patch({ height_cm })}
           />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="bio_height">Height (cm)</Label>
-          <Input
-            id="bio_height"
-            type="text"
-            inputMode="decimal"
-            placeholder="—"
-            value={height}
-            onChange={(e) => setHeight(e.target.value)}
+
+          <WeightField
+            id="profile_weight"
+            label="Current weight"
+            weightKg={draft.weight_kg}
+            unit={unit}
+            onChange={(weight_kg) => patch({ weight_kg })}
           />
+
+          <section className="space-y-2">
+            <h3 className="text-sm font-semibold text-muted-foreground">
+              Workouts per week
+            </h3>
+            <WorkoutsPicker
+              value={draft.activity_level}
+              onChange={(activity_level) => patch({ activity_level })}
+            />
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="text-sm font-semibold text-muted-foreground">Goal</h3>
+            <GoalPicker value={draft.goal} onChange={(goal) => patch({ goal })} />
+          </section>
+
+          {draft.goal !== null && draft.goal !== 'maintain' && (
+            <>
+              <WeightField
+                id="profile_target_weight"
+                label={draft.goal === 'gain' ? 'Goal weight' : 'Desired weight'}
+                weightKg={draft.target_weight_kg}
+                unit={unit}
+                onChange={(target_weight_kg) => patch({ target_weight_kg })}
+              />
+              <PacePicker
+                value={draft.pace_kg_per_week}
+                unit={unit}
+                onChange={(pace_kg_per_week) => patch({ pace_kg_per_week })}
+              />
+            </>
+          )}
+
+          <section className="space-y-2">
+            <h3 className="text-sm font-semibold text-muted-foreground">Diet</h3>
+            <DietPicker value={draft.diet} onChange={(diet) => patch({ diet })} />
+          </section>
+
+          <Button size="xl" className="w-full" disabled={save.isPending} onClick={submit}>
+            {save.isPending ? 'Saving…' : 'Save plan'}
+          </Button>
         </div>
-      </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="bio_activity">Activity level</Label>
-        <NativeSelect
-          id="bio_activity"
-          value={activity}
-          onChange={(e) => setActivity(e.target.value as '' | ActivityLevel)}
-        >
-          <option value="">—</option>
-          {ACTIVITY_LEVELS.map((a) => (
-            <option key={a.value} value={a.value}>
-              {a.label}
-            </option>
-          ))}
-        </NativeSelect>
-      </div>
-      {(validationError || save.isError) && (
-        <p className="text-sm font-medium text-destructive" role="alert">
-          {validationError ?? errorMessage(save.error)}
-        </p>
-      )}
-      <Button type="submit" size="lg" className="w-full" disabled={save.isPending}>
-        {save.isPending ? 'Saving…' : 'Save biometrics'}
-      </Button>
-    </form>
+      </DialogContent>
+    </Dialog>
   )
 }
 
-function BiometricsCard() {
-  const query = useQuery({ queryKey: qk.profile, queryFn: api.getProfile })
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Biometrics</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {query.isPending ? (
-          <div className="space-y-3">
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-          </div>
-        ) : query.isError ? (
-          <p className="text-sm font-medium text-destructive">
-            {errorMessage(query.error)}
-          </p>
-        ) : (
-          <BiometricsForm profile={query.data} />
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-// ---------- Password ----------
-
-function PasswordCard() {
+function PasswordDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { applyToken } = useAuth()
   const toast = useToast()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
-  const [confirm, setConfirm] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   const change = useMutation({
-    mutationFn: () => api.changePassword({ current_password: current, new_password: next }),
+    mutationFn: () =>
+      api.changePassword({ current_password: current, new_password: next }),
     onSuccess: (res) => {
-      // Fresh token — old ones are revoked server-side (pwd_at mismatch).
       applyToken(res.token)
-      setCurrent('')
-      setNext('')
-      setConfirm('')
-      toast.show('Password changed!', { pose: 'happy' })
+      toast.show('Password changed')
+      handleClose()
     },
-    onError: (e) => {
-      if (isApiError(e) && e.code === 'invalid_credentials') {
-        setError("Your current password doesn't match.")
-      } else {
-        setError(errorMessage(e))
-      }
-    },
+    onError: (e) => setError(errorMessage(e)),
   })
 
-  function handleSubmit(e: FormEvent) {
+  function handleClose() {
+    setCurrent('')
+    setNext('')
+    setError(null)
+    onClose()
+  }
+
+  function submit(e: FormEvent) {
     e.preventDefault()
     setError(null)
     if (next.length < 8) return setError('New password must be at least 8 characters.')
-    if (next !== confirm) return setError("New passwords don't match.")
     change.mutate()
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Change password</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form className="space-y-4" onSubmit={handleSubmit} noValidate>
+    <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
+      <DialogContent aria-describedby={undefined}>
+        <DialogHeader>
+          <DialogTitle>Change password</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={submit} className="space-y-4" noValidate>
           <div className="space-y-1.5">
             <Label htmlFor="pw_current">Current password</Label>
             <Input
@@ -318,9 +246,9 @@ function PasswordCard() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="pw_new">New password</Label>
+            <Label htmlFor="pw_next">New password</Label>
             <Input
-              id="pw_new"
+              id="pw_next"
               type="password"
               autoComplete="new-password"
               placeholder="At least 8 characters"
@@ -328,95 +256,257 @@ function PasswordCard() {
               onChange={(e) => setNext(e.target.value)}
             />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="pw_confirm">Confirm new password</Label>
-            <Input
-              id="pw_confirm"
-              type="password"
-              autoComplete="new-password"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-            />
-          </div>
           {error && (
             <p className="text-sm font-medium text-destructive" role="alert">
               {error}
             </p>
           )}
-          <Button
-            type="submit"
-            size="lg"
-            className="w-full"
-            disabled={change.isPending || !current || !next}
-          >
-            {change.isPending ? 'Changing…' : 'Change password'}
+          <Button type="submit" size="xl" className="w-full" disabled={change.isPending}>
+            {change.isPending ? 'Saving…' : 'Update password'}
           </Button>
         </form>
-      </CardContent>
-    </Card>
+      </DialogContent>
+    </Dialog>
   )
 }
 
-// ---------- Data & session ----------
-
-function DataCard() {
-  const toast = useToast()
-  const { logout } = useAuth()
-  const [exporting, setExporting] = useState(false)
-
-  async function handleExport() {
-    setExporting(true)
-    try {
-      await api.exportXlsx()
-      toast.show('Export downloaded!', { pose: 'cheer' })
-    } catch (e) {
-      toast.show(errorMessage(e), { tone: 'error' })
-    } finally {
-      setExporting(false)
-    }
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Your data</CardTitle>
-        <CardDescription>Everything you log belongs to you.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        <Button
-          variant="outline"
-          size="lg"
-          className="w-full"
-          disabled={exporting}
-          onClick={() => void handleExport()}
-        >
-          <Download strokeWidth={1.8} />
-          {exporting ? 'Preparing…' : 'Export my data (.xlsx)'}
-        </Button>
-        <Button
-          variant="ghost"
-          size="lg"
-          className="w-full text-destructive hover:bg-destructive/10 hover:text-destructive"
-          onClick={logout}
-        >
-          <LogOut strokeWidth={1.8} />
-          Log out
-        </Button>
-      </CardContent>
-    </Card>
-  )
-}
-
+/** Profile: plan summary + editing, habits, account, logout. */
 export function Profile() {
+  const { user, setUser, logout } = useAuth()
+  const qc = useQueryClient()
+  const toast = useToast()
+
+  const [editingPlan, setEditingPlan] = useState(false)
+  const [changingPassword, setChangingPassword] = useState(false)
+  const [addingHabit, setAddingHabit] = useState(false)
+  const [fullName, setFullName] = useState(user?.full_name ?? '')
+  const [timezone, setTimezone] = useState(user?.timezone ?? 'UTC')
+
+  const profileQuery = useQuery({ queryKey: qk.profile, queryFn: api.getProfile })
+  const planQuery = useQuery({ queryKey: qk.plan, queryFn: api.getPlan })
+  const habitsQuery = useQuery({ queryKey: qk.habits, queryFn: () => api.getHabits() })
+
+  const saveAccount = useMutation({
+    mutationFn: () =>
+      api.updateMe({ full_name: fullName.trim(), timezone: timezone.trim() }),
+    onSuccess: (u) => {
+      setUser(u)
+      invalidateProfileData(qc)
+      toast.show('Account updated')
+    },
+    onError: (e) => toast.show(errorMessage(e), { tone: 'error' }),
+  })
+
+  const archive = useMutation({
+    mutationFn: (id: number) => api.archiveHabit(id),
+    onSuccess: () => {
+      invalidateHabitData(qc)
+      toast.show('Habit archived')
+    },
+    onError: (e) => toast.show(errorMessage(e), { tone: 'error' }),
+  })
+
+  const plan = planQuery.data
+  const habits = habitsQuery.data?.habits ?? []
+
+  const accountDirty =
+    fullName.trim() !== (user?.full_name ?? '') ||
+    timezone.trim() !== (user?.timezone ?? '')
+
   return (
-    <div className="space-y-4 p-4 pt-[max(1.25rem,env(safe-area-inset-top))]">
+    <div className="space-y-5 p-4 pt-[max(1.25rem,env(safe-area-inset-top))]">
       <header className="px-1">
         <h1 className="text-2xl font-bold tracking-tight">Profile</h1>
+        <p className="mt-0.5 text-sm text-muted-foreground">{user?.email}</p>
       </header>
-      <AccountCard />
-      <BiometricsCard />
-      <PasswordCard />
-      <DataCard />
+
+      {/* Plan */}
+      <Card>
+        <CardHeader className="flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Target aria-hidden="true" className="size-4" strokeWidth={1.8} />
+            Your plan
+          </CardTitle>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => setEditingPlan(true)}
+            disabled={!profileQuery.isSuccess}
+          >
+            <Pencil strokeWidth={1.8} />
+            Edit
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {planQuery.isPending ? (
+            <Skeleton className="h-24 w-full rounded-2xl" />
+          ) : plan?.complete && plan.targets ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <span
+                  aria-hidden="true"
+                  className="flex size-11 items-center justify-center rounded-2xl bg-secondary"
+                >
+                  <Flame className="size-5" strokeWidth={1.6} />
+                </span>
+                <div>
+                  <p className="text-2xl font-bold tabular-nums leading-none tracking-tight">
+                    {plan.targets.calories}
+                    <span className="ml-1 text-sm font-semibold text-muted-foreground">
+                      kcal/day
+                    </span>
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    P {plan.targets.protein_g}g · C {plan.targets.carbs_g}g · F{' '}
+                    {plan.targets.fat_g}g
+                  </p>
+                </div>
+              </div>
+              <Separator />
+              <p className="text-sm text-muted-foreground">
+                {plan.goal ? GOAL_LABELS[plan.goal] : 'No goal set'}
+                {plan.target_weight_kg !== null && ` → ${plan.target_weight_kg} kg`}
+                {plan.projected_end_date &&
+                  ` by ${formatLongDate(plan.projected_end_date)}`}
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Your plan is incomplete — fill in the missing details to unlock daily
+              targets.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Habits */}
+      <Card>
+        <CardHeader className="flex-row items-center justify-between">
+          <CardTitle>Habits</CardTitle>
+          <Button size="sm" variant="secondary" onClick={() => setAddingHabit(true)}>
+            <Plus strokeWidth={2} />
+            Add
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {habitsQuery.isPending ? (
+            <Skeleton className="h-16 w-full rounded-2xl" />
+          ) : habits.length > 0 ? (
+            <ul className="space-y-2">
+              {habits.map((h) => {
+                const Icon = HABIT_ICONS[h.kind]
+                return (
+                  <li
+                    key={h.id}
+                    className="flex items-center gap-3 rounded-2xl border bg-card px-3.5 py-2.5"
+                  >
+                    <Icon
+                      aria-hidden="true"
+                      className="size-4.5 shrink-0"
+                      strokeWidth={1.6}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">{h.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {h.daily_target !== null
+                          ? `${h.direction === 'reduce' ? 'Stay under' : 'Reach'} ${h.daily_target} ${h.unit}/day`
+                          : `Counting ${h.unit}`}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Archive ${h.name}`}
+                      className="text-muted-foreground"
+                      disabled={archive.isPending}
+                      onClick={() => archive.mutate(h.id)}
+                    >
+                      <Archive strokeWidth={1.8} />
+                    </Button>
+                  </li>
+                )
+              })}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Nothing tracked yet — add cigarettes, water, coffee or anything countable.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Account */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Account</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="account_name">Full name</Label>
+            <Input
+              id="account_name"
+              autoComplete="name"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="account_tz">Timezone</Label>
+            <Input
+              id="account_tz"
+              placeholder="e.g. Asia/Tehran"
+              value={timezone}
+              onChange={(e) => setTimezone(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Days start and end in this timezone — it shapes streaks and reports.
+            </p>
+          </div>
+          {accountDirty && (
+            <Button
+              className="w-full"
+              disabled={saveAccount.isPending || fullName.trim() === ''}
+              onClick={() => saveAccount.mutate()}
+            >
+              {saveAccount.isPending ? 'Saving…' : 'Save changes'}
+            </Button>
+          )}
+          <Separator />
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => setChangingPassword(true)}
+          >
+            Change password
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Button
+        variant="ghost"
+        className="w-full text-destructive hover:bg-destructive/10 hover:text-destructive"
+        onClick={logout}
+      >
+        <LogOut strokeWidth={1.8} />
+        Log out
+      </Button>
+
+      {profileQuery.data && (
+        <EditPlanSheet
+          open={editingPlan}
+          profile={profileQuery.data}
+          onClose={() => setEditingPlan(false)}
+        />
+      )}
+      <PasswordDialog
+        open={changingPassword}
+        onClose={() => setChangingPassword(false)}
+      />
+      <AddHabitDialog
+        open={addingHabit}
+        onClose={() => setAddingHabit(false)}
+        existingKinds={habits.map((h) => h.kind)}
+      />
     </div>
   )
 }

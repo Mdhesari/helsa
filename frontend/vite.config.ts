@@ -12,8 +12,9 @@ export default defineConfig({
     },
   },
   server: {
+    // 8080 is often taken; the backend dev default here is 8790.
     proxy: {
-      '/api': `http://localhost:${process.env.BACKEND_PORT ?? '8080'}`,
+      '/api': `http://localhost:${process.env.BACKEND_PORT ?? '8790'}`,
     },
   },
 })

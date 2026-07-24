@@ -1,4 +1,6 @@
--- Helsa schema v1 (SQLite). Embedded and applied at startup; keep idempotent.
+-- Helsa schema v2 (SQLite). Embedded and applied at startup; keep idempotent.
+-- NOTE: the v1 -> v2 profiles migration (drop of the age-based table) runs in
+-- db.go BEFORE this file is applied, so the CREATE below always wins.
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS users (
@@ -11,14 +13,19 @@ CREATE TABLE IF NOT EXISTS users (
     created_at          INTEGER NOT NULL
 );
 
+-- v2 goal-based profile. Every field nullable; PUT is a partial upsert.
 CREATE TABLE IF NOT EXISTS profiles (
-    user_id        INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    age            INTEGER,          -- nullable; 10..120
-    sex            TEXT,             -- nullable; 'male' | 'female'
-    weight_kg      REAL,             -- nullable; 20..400
-    height_cm      REAL,             -- nullable; 90..250
-    activity_level TEXT,             -- nullable; 'sedentary'|'light'|'moderate'|'active'|'very_active'
-    updated_at     INTEGER NOT NULL
+    user_id          INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    birth_date       TEXT,   -- nullable; 'YYYY-MM-DD', age 10..120 at write time
+    sex              TEXT,   -- nullable; 'male' | 'female' | 'other'
+    height_cm        REAL,   -- nullable; 90..250
+    weight_kg        REAL,   -- nullable; 20..400 (kept current by POST /weights)
+    activity_level   TEXT,   -- nullable; 'sedentary'|'light'|'moderate'|'active'|'very_active'
+    goal             TEXT,   -- nullable; 'lose' | 'maintain' | 'gain'
+    target_weight_kg REAL,   -- nullable; 20..400
+    pace_kg_per_week REAL,   -- nullable; 0.1..1.5
+    diet             TEXT,   -- nullable; 'balanced'|'whole_food'|'mediterranean'|'flexitarian'|'pescatarian'|'vegetarian'|'vegan'
+    updated_at       INTEGER NOT NULL
 );
 
 -- Denormalized nutrient snapshot per log entry. food_ref_id only records which
@@ -41,6 +48,71 @@ CREATE TABLE IF NOT EXISTS food_logs (
 CREATE INDEX IF NOT EXISTS idx_food_logs_user_logged_at ON food_logs(user_id, logged_at);
 -- idx_food_logs_food_ref is created in db.go after ensureColumn, because on
 -- pre-food_ref databases the column does not exist until migration runs.
+
+-- Workout entries. calories is always stored: the client value, or the server
+-- estimate (MET x weight x hours) computed once at write time.
+CREATE TABLE IF NOT EXISTS workouts (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id            INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    activity           TEXT    NOT NULL, -- 'walking'|'running'|'cycling'|'swimming'|'strength'|'yoga'|'hiit'|'sports'|'other'
+    duration_min       INTEGER NOT NULL CHECK (duration_min BETWEEN 1 AND 1440),
+    intensity          TEXT    NOT NULL DEFAULT 'moderate', -- 'low' | 'moderate' | 'high'
+    calories           REAL    NOT NULL CHECK (calories >= 0),
+    calories_estimated INTEGER NOT NULL DEFAULT 0,
+    notes              TEXT    NOT NULL DEFAULT '',
+    logged_at          INTEGER NOT NULL, -- unix seconds, UTC
+    created_at         INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_workouts_user_logged_at ON workouts(user_id, logged_at);
+
+-- Weight measurements. Creating the newest one also updates profiles.weight_kg.
+CREATE TABLE IF NOT EXISTS weights (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    weight_kg   REAL    NOT NULL CHECK (weight_kg BETWEEN 20 AND 400),
+    measured_at INTEGER NOT NULL, -- unix seconds, UTC
+    created_at  INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_weights_user_measured_at ON weights(user_id, measured_at);
+
+-- Habits. DELETE archives (soft delete) so logs are preserved.
+CREATE TABLE IF NOT EXISTS habits (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind         TEXT    NOT NULL, -- 'cigarette' | 'water' | 'coffee' | 'alcohol' | 'custom'
+    name         TEXT    NOT NULL,
+    unit         TEXT    NOT NULL,
+    direction    TEXT    NOT NULL, -- 'reduce' (stay under target) | 'build' (reach at least target)
+    daily_target INTEGER CHECK (daily_target IS NULL OR daily_target > 0),
+    archived     INTEGER NOT NULL DEFAULT 0,
+    created_at   INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_habits_user ON habits(user_id);
+
+CREATE TABLE IF NOT EXISTS habit_logs (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    habit_id   INTEGER NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
+    count      INTEGER NOT NULL CHECK (count BETWEEN 1 AND 100),
+    logged_at  INTEGER NOT NULL, -- unix seconds, UTC
+    created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_habit_logs_habit_logged_at ON habit_logs(habit_id, logged_at);
+
+-- Diary: exactly one row per (user, local date); rows with all content fields
+-- null are deleted rather than stored.
+CREATE TABLE IF NOT EXISTS diary_entries (
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    date       TEXT    NOT NULL, -- 'YYYY-MM-DD' in the user's timezone
+    mood       INTEGER CHECK (mood IS NULL OR mood BETWEEN 1 AND 5),
+    energy     INTEGER CHECK (energy IS NULL OR energy BETWEEN 1 AND 5),
+    text       TEXT,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, date)
+);
 
 -- Reference foods: global seeded rows (owner_user_id IS NULL) and per-user
 -- custom foods (owner_user_id set, source='user'). Nutrients are per

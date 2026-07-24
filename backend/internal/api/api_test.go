@@ -48,16 +48,36 @@ func doJSON(t *testing.T, method, url, token string, body any, out any) *http.Re
 	return resp
 }
 
-func TestHappyPath(t *testing.T) {
+// newTestServer spins up a full API server against a fresh temp database.
+func newTestServer(t *testing.T) (base string) {
+	t.Helper()
 	sqlDB, err := db.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer sqlDB.Close()
-
+	t.Cleanup(func() { sqlDB.Close() })
 	srv := httptest.NewServer(api.New(sqlDB, "test-secret", insights.StubProvider{}).Handler())
-	defer srv.Close()
-	base := srv.URL + "/api/v1"
+	t.Cleanup(srv.Close)
+	return srv.URL + "/api/v1"
+}
+
+// register creates a user and returns a bearer token.
+func register(t *testing.T, base, name, email, timezone string) string {
+	t.Helper()
+	var reg struct {
+		Token string `json:"token"`
+	}
+	resp := doJSON(t, http.MethodPost, base+"/auth/register", "", map[string]any{
+		"full_name": name, "email": email, "password": "secret123", "timezone": timezone,
+	}, &reg)
+	if resp.StatusCode != http.StatusCreated || reg.Token == "" {
+		t.Fatalf("register %s = %d", email, resp.StatusCode)
+	}
+	return reg.Token
+}
+
+func TestHappyPath(t *testing.T) {
+	base := newTestServer(t)
 
 	// Health, no auth.
 	var health struct {
@@ -139,17 +159,22 @@ func TestHappyPath(t *testing.T) {
 
 	// Dashboard reflects today's totals and the streak.
 	var dash struct {
-		ProfileComplete bool `json:"profile_complete"`
-		Targets         *any `json:"targets"`
-		Today           struct {
-			Date   string `json:"date"`
-			Totals struct {
-				Calories float64 `json:"calories"`
-				ProteinG float64 `json:"protein_g"`
-				CarbsG   float64 `json:"carbs_g"`
-				FatG     float64 `json:"fat_g"`
-			} `json:"totals"`
-			LogCount int `json:"log_count"`
+		Plan struct {
+			Complete bool `json:"complete"`
+			Targets  *any `json:"targets"`
+		} `json:"plan"`
+		Today struct {
+			Date string `json:"date"`
+			Food struct {
+				Totals struct {
+					Calories float64 `json:"calories"`
+					ProteinG float64 `json:"protein_g"`
+					CarbsG   float64 `json:"carbs_g"`
+					FatG     float64 `json:"fat_g"`
+				} `json:"totals"`
+				LogCount int `json:"log_count"`
+			} `json:"food"`
+			Remaining *any `json:"remaining"`
 		} `json:"today"`
 		Streak struct {
 			CurrentDays int `json:"current_days"`
@@ -160,12 +185,12 @@ func TestHappyPath(t *testing.T) {
 	if resp.StatusCode != 200 {
 		t.Fatalf("dashboard status = %d", resp.StatusCode)
 	}
-	if dash.ProfileComplete || dash.Targets != nil {
-		t.Errorf("empty profile must give profile_complete=false and null targets: %+v", dash)
+	if dash.Plan.Complete || dash.Plan.Targets != nil || dash.Today.Remaining != nil {
+		t.Errorf("empty profile must give plan.complete=false, null targets and null remaining: %+v", dash)
 	}
-	tt := dash.Today.Totals
-	if dash.Today.LogCount != 1 || tt.Calories != 150 || tt.ProteinG != 20 || tt.CarbsG != 8 || tt.FatG != 4 {
-		t.Errorf("today = %+v, want 1 log with 150/20/8/4", dash.Today)
+	tt := dash.Today.Food.Totals
+	if dash.Today.Food.LogCount != 1 || tt.Calories != 150 || tt.ProteinG != 20 || tt.CarbsG != 8 || tt.FatG != 4 {
+		t.Errorf("today.food = %+v, want 1 log with 150/20/8/4", dash.Today.Food)
 	}
 	if dash.Streak.CurrentDays != 1 || dash.Streak.LongestDays != 1 {
 		t.Errorf("streak = %+v, want 1/1", dash.Streak)
