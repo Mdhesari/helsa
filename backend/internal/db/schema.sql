@@ -35,10 +35,17 @@ CREATE TABLE IF NOT EXISTS food_logs (
     fat_g       REAL    NOT NULL DEFAULT 0 CHECK (fat_g >= 0),
     logged_at   INTEGER NOT NULL, -- unix seconds, UTC
     created_at  INTEGER NOT NULL,
-    food_ref_id INTEGER REFERENCES food_ref(id) ON DELETE SET NULL
+    food_ref_id INTEGER REFERENCES food_ref(id) ON DELETE SET NULL,
+    -- Client-generated key for offline replay. The PWA queues logs written
+    -- while offline and retries them; if a reply is lost in transit the retry
+    -- must not create a second row. NULL for online writes that omit it.
+    client_key  TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_food_logs_user_logged_at ON food_logs(user_id, logged_at);
+-- idx_food_logs_client_key is created in db.go after ensureColumn, for the same
+-- reason as idx_food_logs_food_ref: on pre-existing databases the CREATE TABLE
+-- above is skipped, so client_key does not exist until the migration runs.
 -- idx_food_logs_food_ref is created in db.go after ensureColumn, because on
 -- pre-food_ref databases the column does not exist until migration runs.
 

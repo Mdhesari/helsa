@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Pencil, Trash2 } from 'lucide-react'
+import { CloudOff, Pencil, Trash2 } from 'lucide-react'
 
 import {
   Dialog,
@@ -14,6 +14,7 @@ import { errorMessage } from '../api/client'
 import type { FoodLog, FoodLogInput } from '../api/types'
 import { invalidateFoodData } from '../lib/queries'
 import { formatTime } from '../lib/date'
+import { isPendingLog } from '../lib/useLogFood'
 import { FoodLogForm } from './FoodLogForm'
 import { useToast } from './Toast'
 
@@ -51,48 +52,65 @@ export function LogList({ logs }: { logs: FoodLog[] }) {
   return (
     <>
       <ul className="space-y-2">
-        {logs.map((log) => (
-          <li
-            key={log.id}
-            className="flex items-center gap-3 rounded-2xl border bg-card px-4 py-3 shadow-[0_1px_2px_rgb(0_0_0/0.03)]"
-          >
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-medium">{log.food_name}</p>
-              <p className="truncate text-xs text-muted-foreground">
-                {formatTime(log.logged_at)}
-                {log.serving && ` · ${log.serving}`}
-                {` · P ${Math.round(log.protein_g)} · C ${Math.round(log.carbs_g)} · F ${Math.round(log.fat_g)}`}
-              </p>
-            </div>
-            <span className="font-semibold tabular-nums">
-              {Math.round(log.calories)}
-              <span className="ml-0.5 text-[10px] font-medium text-muted-foreground">
-                kcal
+        {logs.map((log) => {
+          // Queued offline: no server id yet, so editing and deleting have
+          // nothing to address until it syncs.
+          const isPending = isPendingLog(log)
+          return (
+            <li
+              key={log.id}
+              className={`flex items-center gap-3 rounded-2xl border bg-card px-4 py-3 shadow-[0_1px_2px_rgb(0_0_0/0.03)] ${
+                isPending ? 'opacity-70' : ''
+              }`}
+            >
+              <div className="min-w-0 flex-1">
+                <p className="flex items-center gap-1.5 truncate font-medium">
+                  {log.food_name}
+                  {isPending && (
+                    <CloudOff
+                      aria-label="Waiting to sync"
+                      className="size-3.5 shrink-0 text-muted-foreground"
+                      strokeWidth={2}
+                    />
+                  )}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {isPending ? 'Waiting to sync' : formatTime(log.logged_at)}
+                  {log.serving && ` · ${log.serving}`}
+                  {` · P ${Math.round(log.protein_g)} · C ${Math.round(log.carbs_g)} · F ${Math.round(log.fat_g)}`}
+                </p>
+              </div>
+              <span className="font-semibold tabular-nums">
+                {Math.round(log.calories)}
+                <span className="ml-0.5 text-[10px] font-medium text-muted-foreground">
+                  kcal
+                </span>
               </span>
-            </span>
-            <div className="flex shrink-0 gap-0.5">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Edit ${log.food_name}`}
-                className="text-muted-foreground"
-                onClick={() => setEditing(log)}
-              >
-                <Pencil strokeWidth={1.8} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Delete ${log.food_name}`}
-                className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                onClick={() => handleDelete(log)}
-                disabled={remove.isPending}
-              >
-                <Trash2 strokeWidth={1.8} />
-              </Button>
-            </div>
-          </li>
-        ))}
+              <div className="flex shrink-0 gap-0.5">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Edit ${log.food_name}`}
+                  className="text-muted-foreground"
+                  onClick={() => setEditing(log)}
+                  disabled={isPending}
+                >
+                  <Pencil strokeWidth={1.8} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Delete ${log.food_name}`}
+                  className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => handleDelete(log)}
+                  disabled={isPending || remove.isPending}
+                >
+                  <Trash2 strokeWidth={1.8} />
+                </Button>
+              </div>
+            </li>
+          )
+        })}
       </ul>
 
       <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>

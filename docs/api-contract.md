@@ -121,12 +121,21 @@ Validation: age 10–120, weight_kg 20–400, height_cm 90–250, enums as above
 ```jsonc
 // req — logged_at optional (default: now). calories/macros ≥ 0; food_name required non-empty; serving free text (may be "")
 // food_ref_id optional: provenance link to a reference food. 400 if it is not a food visible to the caller.
+// client_key optional (1–64 chars): idempotency key for offline replay, see below.
 { "food_name": "Greek yogurt", "serving": "1 cup", "calories": 150, "protein_g": 20, "carbs_g": 8, "fat_g": 4,
-  "logged_at": "2026-07-02T08:15:00Z", "food_ref_id": 12 }
-// 201 → FoodLog
+  "logged_at": "2026-07-02T08:15:00Z", "food_ref_id": 12, "client_key": "9f1c…" }
+// 201 → FoodLog  (created)
+// 200 → FoodLog  (replay: this client_key already created a log; the original is returned)
 ```
 Logs store a **denormalized nutrient snapshot** computed client-side; the server never recomputes
 from `food_ref_id`. Reports, dashboard and export read only the snapshot.
+
+**Idempotency.** The PWA queues logs written offline and retries them, so a request whose
+response was lost in transit gets replayed. When `client_key` is present the pair
+(user, client_key) is unique: a replay returns **200** with the originally created log instead
+of inserting a duplicate. Requests that omit `client_key` are never deduplicated — two identical
+manual entries are two real meals. `client_key` is POST-only; sending it to `PUT /logs/{id}`
+is a 400.
 
 ### Foods (reference food database)
 

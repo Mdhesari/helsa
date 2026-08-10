@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -9,6 +10,8 @@ import {
 import * as api from '../api/client'
 import { TOKEN_KEY, USER_KEY } from '../api/client'
 import type { RegisterRequest, User } from '../api/types'
+import { clearPersistedCache } from '../lib/persist'
+import { clearUser as clearOutbox } from '../lib/outbox'
 
 interface AuthContextValue {
   user: User | null
@@ -40,6 +43,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
   const [user, setUserState] = useState<User | null>(readStoredUser)
 
+  // An expired or revoked token clears the session from inside the API client;
+  // make that path wipe offline data too, not just the token.
+  useEffect(() => {
+    api.setSessionClearedHandler(() => {
+      void clearPersistedCache()
+      if (user) void clearOutbox(user.id)
+    })
+  }, [user])
+
   const persistSession = useCallback((nextToken: string, nextUser: User) => {
     localStorage.setItem(TOKEN_KEY, nextToken)
     localStorage.setItem(USER_KEY, JSON.stringify(nextUser))
@@ -65,9 +77,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     api.clearSession()
+    // Offline data is personal health data: drop the cached reads and any
+    // unsynced writes so the next person to open the app sees nothing.
+    // Unsynced logs are lost by design — keeping them would replay one
+    // account's meals into whoever signs in next.
+    void clearPersistedCache()
+    if (user) void clearOutbox(user.id)
     setTokenState(null)
     setUserState(null)
-  }, [])
+  }, [user])
 
   const setUser = useCallback((next: User) => {
     localStorage.setItem(USER_KEY, JSON.stringify(next))

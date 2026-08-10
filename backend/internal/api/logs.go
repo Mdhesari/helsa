@@ -25,6 +25,7 @@ type foodLog struct {
 	LoggedAt  int64
 	CreatedAt int64
 	FoodRefID sql.NullInt64 // provenance only; nutrients stay denormalized
+	ClientKey sql.NullString
 }
 
 // foodLogJSON is the FoodLog shape from the contract.
@@ -71,7 +72,13 @@ type logPatch struct {
 	FatG      *float64        `json:"fat_g"`
 	LoggedAt  *string         `json:"logged_at"`
 	FoodRefID json.RawMessage `json:"food_ref_id"`
+	// Idempotency key for offline replay, POST only. See handleCreateLog.
+	ClientKey *string `json:"client_key"`
 }
+
+// maxClientKeyLen bounds the client-supplied idempotency key. The client sends
+// a UUID (36 chars); anything longer is a caller bug or an abuse attempt.
+const maxClientKeyLen = 64
 
 // apply merges the patch into l, validating per the contract. Returns a
 // human-readable validation error.
@@ -162,12 +169,41 @@ func (s *Server) handleCreateLog(w http.ResponseWriter, r *http.Request) {
 	if !s.validateFoodRef(w, r, u.ID, l) {
 		return
 	}
+	if req.ClientKey != nil {
+		key := strings.TrimSpace(*req.ClientKey)
+		if key == "" || len(key) > maxClientKeyLen {
+			badRequest(w, "client_key must be 1-64 characters")
+			return
+		}
+		l.ClientKey = sql.NullString{String: key, Valid: true}
+	}
+
+	// The offline outbox retries queued writes, and a retry may follow a request
+	// that reached us but whose response was lost. ON CONFLICT DO NOTHING makes
+	// the replay a no-op; we then return the row already stored so the client
+	// converges on the server's id instead of creating a duplicate.
 	res, err := s.db.ExecContext(r.Context(),
-		`INSERT INTO food_logs (user_id, food_name, serving, calories, protein_g, carbs_g, fat_g, logged_at, created_at, food_ref_id)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		u.ID, l.FoodName, l.Serving, l.Calories, l.ProteinG, l.CarbsG, l.FatG, l.LoggedAt, l.CreatedAt, l.FoodRefID)
+		`INSERT INTO food_logs (user_id, food_name, serving, calories, protein_g, carbs_g, fat_g, logged_at, created_at, food_ref_id, client_key)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 ON CONFLICT (user_id, client_key) WHERE client_key IS NOT NULL DO NOTHING`,
+		u.ID, l.FoodName, l.Serving, l.Calories, l.ProteinG, l.CarbsG, l.FatG, l.LoggedAt, l.CreatedAt, l.FoodRefID, l.ClientKey)
 	if err != nil {
 		internalError(w, err)
+		return
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if n == 0 {
+		// Replay of a log we already stored — return the original, 200 not 201.
+		existing, err := s.getLogByClientKey(r.Context(), u.ID, l.ClientKey.String)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, toFoodLogJSON(existing))
 		return
 	}
 	l.ID, err = res.LastInsertId()
@@ -176,6 +212,16 @@ func (s *Server) handleCreateLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, toFoodLogJSON(l))
+}
+
+// getLogByClientKey loads the log a replayed client_key already created.
+func (s *Server) getLogByClientKey(ctx context.Context, userID int64, key string) (foodLog, error) {
+	var l foodLog
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id, food_name, serving, calories, protein_g, carbs_g, fat_g, logged_at, created_at, food_ref_id, client_key
+		 FROM food_logs WHERE user_id = ? AND client_key = ?`, userID, key,
+	).Scan(&l.ID, &l.FoodName, &l.Serving, &l.Calories, &l.ProteinG, &l.CarbsG, &l.FatG, &l.LoggedAt, &l.CreatedAt, &l.FoodRefID, &l.ClientKey)
+	return l, err
 }
 
 func (s *Server) handleListLogs(w http.ResponseWriter, r *http.Request) {
@@ -288,6 +334,12 @@ func (s *Server) handleUpdateLog(w http.ResponseWriter, r *http.Request) {
 	var req logPatch
 	if err := decodeBody(r, &req); err != nil {
 		badRequest(w, err.Error())
+		return
+	}
+	// client_key identifies the originating offline write; letting an update
+	// move it would break replay dedup for whichever row held it.
+	if req.ClientKey != nil {
+		badRequest(w, "client_key cannot be changed")
 		return
 	}
 	if err := req.apply(&l); err != nil {

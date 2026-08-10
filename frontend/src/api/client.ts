@@ -23,7 +23,16 @@ import type {
   User,
 } from './types'
 
-const BASE = '/api/v1'
+/**
+ * API base.
+ *
+ * On the web this stays relative, so nginx proxies /api to the backend on the
+ * same origin. The native iOS build serves its UI from `capacitor://localhost`
+ * and has no such proxy, so it needs an absolute origin: set VITE_API_ORIGIN
+ * at build time (see docs/ios-app-store.md).
+ */
+const API_ORIGIN = import.meta.env.VITE_API_ORIGIN ?? ''
+const BASE = `${API_ORIGIN}/api/v1`
 
 // ---------- Token storage ----------
 
@@ -41,6 +50,16 @@ export function setToken(token: string): void {
 export function clearSession(): void {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(USER_KEY)
+}
+
+/**
+ * Wipes offline data belonging to the signed-out account. Set by AuthContext
+ * to avoid importing the storage layer (and IndexedDB) into the API client.
+ */
+let onSessionCleared: (() => void) | null = null
+
+export function setSessionClearedHandler(fn: () => void): void {
+  onSessionCleared = fn
 }
 
 // ---------- Errors ----------
@@ -88,8 +107,10 @@ function handleUnauthorized(err: ApiError): void {
   // (pwd_at mismatch → 401 "unauthorized" on any authed endpoint).
   if (err.status === 401 && err.code === 'unauthorized') {
     clearSession()
+    onSessionCleared?.()
     if (window.location.pathname !== '/login') {
-      window.location.assign('/login')
+      // origin-relative so it stays inside the bundle under capacitor://localhost.
+      window.location.replace(`${window.location.origin}/login`)
     }
   }
 }

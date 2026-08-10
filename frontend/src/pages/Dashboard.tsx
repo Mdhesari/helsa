@@ -8,6 +8,7 @@ import * as api from '../api/client'
 import { errorMessage } from '../api/client'
 import type { Totals } from '../api/types'
 import { qk } from '../lib/queries'
+import { useOnline } from '../lib/useOutbox'
 import { Ring } from '../components/Ring'
 import { StreakBadge } from '../components/StreakBadge'
 import { EmptyState } from '../components/EmptyState'
@@ -151,15 +152,22 @@ function MacroCards({ totals, targets }: { totals: Totals; targets: Totals | nul
 
 export function Dashboard() {
   const query = useQuery({ queryKey: qk.dashboard, queryFn: api.getDashboard })
+  const online = useOnline()
 
   if (query.isPending) return <DashboardSkeleton />
 
+  // Reached only when there is no persisted cache to fall back on — normally a
+  // first run that started offline.
   if (query.isError) {
     return (
       <EmptyState
         pose="think"
-        title="Hmm, that didn't load"
-        body={errorMessage(query.error)}
+        title={online ? "Hmm, that didn't load" : "You're offline"}
+        body={
+          online
+            ? errorMessage(query.error)
+            : 'Connect once to load your day. Anything you log meanwhile is saved and synced later.'
+        }
         action={
           <Button variant="outline" onClick={() => query.refetch()}>
             Try again

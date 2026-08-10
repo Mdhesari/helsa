@@ -1,6 +1,6 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Download, LogOut } from 'lucide-react'
+import { Bell, Download, LogOut } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -18,6 +18,8 @@ import * as api from '../api/client'
 import { errorMessage, isApiError } from '../api/client'
 import type { ActivityLevel, Profile as ProfileShape, Sex } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
+import { isNative } from '../lib/native'
+import * as reminders from '../lib/reminders'
 import { invalidateProfileData, qk } from '../lib/queries'
 import { useToast } from '../components/Toast'
 
@@ -357,6 +359,71 @@ function PasswordCard() {
   )
 }
 
+// ---------- Meal reminders (native only) ----------
+
+/**
+ * Daily local notifications. Native-only: iOS Safari cannot schedule these, so
+ * the card is simply absent in the browser rather than offering something that
+ * would not fire.
+ */
+function RemindersCard() {
+  const toast = useToast()
+  const [enabled, setEnabled] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    void reminders.hasPermission().then(setEnabled)
+  }, [])
+
+  async function toggle() {
+    setBusy(true)
+    try {
+      if (enabled) {
+        await reminders.disableReminders()
+        setEnabled(false)
+        toast.show('Reminders off')
+      } else {
+        const ok = await reminders.enableReminders()
+        setEnabled(ok)
+        toast.show(
+          ok
+            ? 'Reminders on — see you at mealtimes!'
+            : 'Enable notifications for Helsa in iOS Settings to get reminders.',
+          ok ? { pose: 'cheer' } : { tone: 'error' },
+        )
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!isNative) return null
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Meal reminders</CardTitle>
+        <CardDescription>
+          A gentle nudge at breakfast, lunch and dinner. Scheduled on your
+          device — nothing leaves your phone.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button
+          variant={enabled ? 'ghost' : 'outline'}
+          size="lg"
+          className="w-full"
+          disabled={busy}
+          onClick={() => void toggle()}
+        >
+          <Bell strokeWidth={1.8} />
+          {enabled ? 'Turn off reminders' : 'Turn on reminders'}
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
+
 // ---------- Data & session ----------
 
 function DataCard() {
@@ -415,6 +482,7 @@ export function Profile() {
       </header>
       <AccountCard />
       <BiometricsCard />
+      <RemindersCard />
       <PasswordCard />
       <DataCard />
     </div>

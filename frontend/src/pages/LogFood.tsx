@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { PlusCircle } from 'lucide-react'
 
 import { Card } from '@/components/ui/card'
@@ -14,9 +14,11 @@ import { Skeleton } from '@/components/ui/skeleton'
 import * as api from '../api/client'
 import { errorMessage } from '../api/client'
 import type { Food, FoodLogInput } from '../api/types'
-import { invalidateFoodData, invalidateFoodRefData, qk } from '../lib/queries'
+import { qk } from '../lib/queries'
 import { todayStr } from '../lib/date'
 import { useDebouncedValue } from '../lib/useDebouncedValue'
+import { useLogFood, useMergedPendingLogs } from '../lib/useLogFood'
+import { useOnline, usePendingEntries } from '../lib/useOutbox'
 import { FoodLogForm } from '../components/FoodLogForm'
 import { LogList } from '../components/LogList'
 import { EmptyState } from '../components/EmptyState'
@@ -34,9 +36,11 @@ const CHEERS = [
 ]
 
 export function LogFood() {
-  const qc = useQueryClient()
   const toast = useToast()
   const today = todayStr()
+  const logFoodOffline = useLogFood()
+  const pendingEntries = usePendingEntries()
+  const online = useOnline()
 
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<Food | null>(null)
@@ -58,46 +62,36 @@ export function LogFood() {
     queryFn: () => api.getLogs({ date: today }),
   })
 
-  function celebrate() {
-    invalidateFoodData(qc)
-    toast.show(CHEERS[Math.floor(Math.random() * CHEERS.length)], { pose: 'cheer' })
+  function celebrate(queued: boolean) {
+    toast.show(
+      queued
+        ? "Saved offline — it'll sync when you're back."
+        : CHEERS[Math.floor(Math.random() * CHEERS.length)],
+      { pose: 'cheer' },
+    )
   }
 
   const logFood = useMutation({
-    mutationFn: (input: FoodLogInput) => api.createLog(input),
-    onSuccess: () => {
+    mutationFn: (input: FoodLogInput) => logFoodOffline(input),
+    onSuccess: ({ queued }) => {
       setSelected(null)
-      celebrate()
+      celebrate(queued)
     },
   })
 
   // "Create custom food": create the reference food, then log it once (qty 1).
   const createCustom = useMutation({
-    mutationFn: async (input: FoodLogInput) => {
-      const food = await api.createFood({
-        name: input.food_name,
-        serving_label: input.serving || undefined,
-        calories: input.calories,
-        protein_g: input.protein_g,
-        carbs_g: input.carbs_g,
-        fat_g: input.fat_g,
-      })
-      return api.createLog({
-        ...input,
-        serving: input.serving || food.servings[0]?.label || '1 serving',
-        food_ref_id: food.id,
-      })
-    },
-    onSuccess: () => {
+    mutationFn: (input: FoodLogInput) => logFoodOffline(input, 'custom-food'),
+    onSuccess: ({ queued }) => {
       setCreatingCustom(false)
       setQuery('')
-      invalidateFoodRefData(qc)
-      celebrate()
+      celebrate(queued)
     },
   })
 
   const results = searchQuery.data?.foods ?? []
-  const logs = logsQuery.data?.logs ?? []
+  // Queued entries are merged in so they survive a refetch of today's logs.
+  const logs = useMergedPendingLogs(logsQuery.data?.logs ?? [], pendingEntries)
 
   return (
     <div className="space-y-4 p-4 pt-[max(1.25rem,env(safe-area-inset-top))]">
@@ -118,9 +112,17 @@ export function LogFood() {
               <Skeleton className="h-16 w-full rounded-2xl" />
             </div>
           ) : searchQuery.isError ? (
-            <p className="px-1 text-sm font-medium text-destructive">
-              {errorMessage(searchQuery.error)}
-            </p>
+            <Card>
+              <EmptyState
+                pose="sleep"
+                title={online ? 'Search failed' : 'Search needs a connection'}
+                body={
+                  online
+                    ? errorMessage(searchQuery.error)
+                    : "You can still add it with “Create custom food” below — it'll sync later."
+                }
+              />
+            </Card>
           ) : results.length > 0 ? (
             <FoodResultList foods={results} onSelect={setSelected} />
           ) : (
@@ -153,12 +155,20 @@ export function LogFood() {
             <Skeleton className="h-16 w-full rounded-2xl" />
             <Skeleton className="h-16 w-full rounded-2xl" />
           </div>
-        ) : logsQuery.isError ? (
-          <p className="px-1 text-sm font-medium text-destructive">
-            {errorMessage(logsQuery.error)}
-          </p>
         ) : logs.length > 0 ? (
           <LogList logs={logs} />
+        ) : logsQuery.isError ? (
+          <Card>
+            <EmptyState
+              pose="sleep"
+              title={online ? "Couldn't load today's logs" : 'Not synced yet'}
+              body={
+                online
+                  ? errorMessage(logsQuery.error)
+                  : "Today's logs will appear once you're back online."
+              }
+            />
+          </Card>
         ) : (
           <Card>
             <EmptyState

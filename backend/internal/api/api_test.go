@@ -182,3 +182,71 @@ func TestHappyPath(t *testing.T) {
 		t.Fatalf("unauthenticated dashboard = %d %+v, want 401 unauthorized", resp.StatusCode, authErr)
 	}
 }
+
+// A queued offline log that is replayed (because the first response was lost)
+// must not create a second row — the outbox relies on this.
+func TestCreateLogClientKeyIsIdempotent(t *testing.T) {
+	sqlDB, err := db.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sqlDB.Close()
+
+	srv := httptest.NewServer(api.New(sqlDB, "test-secret", insights.StubProvider{}).Handler())
+	defer srv.Close()
+	base := srv.URL + "/api/v1"
+
+	var reg struct {
+		Token string `json:"token"`
+	}
+	doJSON(t, http.MethodPost, base+"/auth/register", "", map[string]any{
+		"full_name": "Ada L", "email": "ada@x.com", "password": "secret123",
+	}, &reg)
+	token := reg.Token
+
+	body := map[string]any{
+		"food_name": "Oatmeal", "serving": "1 bowl", "calories": 150,
+		"protein_g": 5, "carbs_g": 27, "fat_g": 3,
+		"client_key": "11111111-2222-3333-4444-555555555555",
+	}
+
+	var first struct {
+		ID int64 `json:"id"`
+	}
+	resp := doJSON(t, http.MethodPost, base+"/logs", token, body, &first)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("first create = %d, want 201", resp.StatusCode)
+	}
+
+	// Replay of the same key: 200 with the original row, not a new one.
+	var replay struct {
+		ID int64 `json:"id"`
+	}
+	resp = doJSON(t, http.MethodPost, base+"/logs", token, body, &replay)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("replay = %d, want 200", resp.StatusCode)
+	}
+	if replay.ID != first.ID {
+		t.Errorf("replay id = %d, want the original %d", replay.ID, first.ID)
+	}
+
+	var logs struct {
+		Logs []struct {
+			ID int64 `json:"id"`
+		} `json:"logs"`
+	}
+	doJSON(t, http.MethodGet, base+"/logs", token, nil, &logs)
+	if len(logs.Logs) != 1 {
+		t.Fatalf("got %d logs after replay, want 1", len(logs.Logs))
+	}
+
+	// Omitting client_key stays non-idempotent: two identical manual entries
+	// are two real meals.
+	noKey := map[string]any{"food_name": "Apple", "calories": 95}
+	doJSON(t, http.MethodPost, base+"/logs", token, noKey, nil)
+	doJSON(t, http.MethodPost, base+"/logs", token, noKey, nil)
+	doJSON(t, http.MethodGet, base+"/logs", token, nil, &logs)
+	if len(logs.Logs) != 3 {
+		t.Fatalf("got %d logs, want 3 (1 keyed + 2 unkeyed)", len(logs.Logs))
+	}
+}

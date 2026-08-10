@@ -43,6 +43,17 @@ func Open(path string) (*sql.DB, error) {
 		sqlDB.Close()
 		return nil, fmt.Errorf("index food_logs.food_ref_id: %w", err)
 	}
+	// Same story for client_key, added with the offline outbox.
+	if err := ensureColumn(sqlDB, "food_logs", "client_key", "client_key TEXT"); err != nil {
+		sqlDB.Close()
+		return nil, fmt.Errorf("migrate food_logs.client_key: %w", err)
+	}
+	if _, err := sqlDB.Exec(
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_food_logs_client_key
+		 ON food_logs(user_id, client_key) WHERE client_key IS NOT NULL`); err != nil {
+		sqlDB.Close()
+		return nil, fmt.Errorf("index food_logs.client_key: %w", err)
+	}
 	if err := fooddata.Seed(sqlDB); err != nil {
 		sqlDB.Close()
 		return nil, fmt.Errorf("seed food data: %w", err)

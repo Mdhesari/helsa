@@ -9,8 +9,12 @@ advice).
 
 - **Frontend**: React + Vite + TypeScript + Tailwind v4 — [`frontend/`](frontend/)
 - **Backend**: Go (stdlib `net/http`), SQLite (modernc, CGO-free) — [`backend/`](backend/)
+- **iOS**: Capacitor wrapper around the same build — [`frontend/ios/`](frontend/ios/)
 - **Contract**: [`docs/api-contract.md`](docs/api-contract.md) — single source of truth for the API
 - **Design**: tokens + mascot SVGs — [`design/`](design/)
+
+Installable PWA with offline food logging — see [`docs/pwa-offline.md`](docs/pwa-offline.md).
+App Store steps live in [`docs/ios-app-store.md`](docs/ios-app-store.md).
 
 ## Run (dev)
 
@@ -40,4 +44,8 @@ cd frontend && npm install && npm run dev
   table later only pre-fills the form; AI insights sit behind a `Provider` interface
   (stub / OpenRouter / anything OpenAI-compatible); clinical-grade review can slot in behind
   the same report-stats pipeline.
-- **Deferred**: account deletion, refresh tokens, food-reference table, async insight caching.
+- **Offline**: food logs written without a connection are queued in IndexedDB and replayed
+  on reconnect. `POST /logs` accepts a `client_key` and treats `(user_id, client_key)` as
+  unique, so a retry after a lost response returns the original log instead of duplicating it.
+- **Deferred**: account deletion, refresh tokens, async insight caching.
+  Account deletion is required by App Store guideline 5.1.1(v) — it blocks iOS submission.

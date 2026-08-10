@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# vite-plugin-pwa dev-mode service worker output
+dev-dist
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

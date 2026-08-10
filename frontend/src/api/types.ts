@@ -180,6 +180,11 @@ export interface FoodLogInput {
   logged_at?: string
   /** Optional provenance link; explicit null clears it on PUT. */
   food_ref_id?: number | null
+  /**
+   * Idempotency key for offline replay (POST only). When set, the server
+   * returns the already-created log instead of inserting a duplicate.
+   */
+  client_key?: string
 }
 
 export interface LogsResponse {

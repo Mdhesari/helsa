@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!--
+    Maskable source: Android/Chrome may crop this to a circle or squircle.
+    Everything meaningful stays inside the 40% safe-zone radius, so the mark
+    is drawn at 70% scale centred on the full-bleed background.
+  -->
+  <rect width="64" height="64" fill="#58cc02"/>
+  <g transform="translate(32 32) scale(0.7) translate(-32 -32)">
+    <path d="M32 46c-9-5-14-11-14-18a9 9 0 0 1 14-7.4A9 9 0 0 1 46 28c0 7-5 13-14 18z" fill="#ffffff"/>
+    <path d="M32 20c1-6 5-9 10-9 0 6-4 10-10 9z" fill="#2a6106"/>
+  </g>
+</svg>
