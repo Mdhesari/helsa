@@ -30,7 +30,7 @@ export function LogList({ logs }: { logs: FoodLog[] }) {
     onSuccess: () => {
       invalidateFoodData(qc)
       setEditing(null)
-      toast.show('Updated!', { pose: 'happy' })
+      toast.show('Updated!')
     },
   })
 

@@ -4,65 +4,66 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Helsa theme — shadcn/ui (Tailwind v4), near-monochrome & minimal.
- * White surfaces, near-black primary, muted gray secondary text.
- * Macro accents (protein / carbs / fat) are the only color in the app.
+ * Helsa v2 theme — CalAI-style: near-white canvas, white rounded-3xl cards
+ * with hairline borders, near-black ink and pill CTAs. Warm peach accent used
+ * sparingly; macro colors are the only other chroma.
  */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.145 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.145 0 0);
-  --radius: 1rem;
+  --background: #fafafa;
+  --foreground: #16161a;
+  --card: #ffffff;
+  --card-foreground: #16161a;
+  --popover: #ffffff;
+  --popover-foreground: #16161a;
+  --primary: #16161a;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f8;
+  --secondary-foreground: #16161a;
+  --muted: #f4f4f8;
+  --muted-foreground: #8e8e96;
+  --accent: #e8a87c;
+  --accent-foreground: #ffffff;
+  --info: #4a7dff;
+  --destructive: #e05252;
+  --destructive-foreground: #ffffff;
+  --border: #ececf0;
+  --input: #e4e4ea;
+  --ring: #16161a;
+  --radius: 1.5rem; /* cards: 24px */
 
-  /* Macro accents — the only chromatic tokens in the design. */
-  --protein: oklch(0.637 0.176 25.3); /* soft red   */
-  --carbs: oklch(0.75 0.14 75); /* warm amber */
-  --fat: oklch(0.623 0.155 253); /* calm blue  */
-  --calories: oklch(0.145 0 0); /* near-black */
+  /* Macro accents. */
+  --protein: #e36a6a;
+  --carbs: #e8a13c;
+  --fat: #5b8def;
+  --calories: #16161a;
 
   --chart-1: var(--calories);
   --chart-2: var(--protein);
   --chart-3: var(--carbs);
   --chart-4: var(--fat);
-  --chart-5: oklch(0.556 0 0);
+  --chart-5: #8e8e96;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --background: #131316;
+  --foreground: #f7f7f8;
+  --card: #1c1c21;
+  --card-foreground: #f7f7f8;
+  --popover: #1c1c21;
+  --popover-foreground: #f7f7f8;
+  --primary: #f7f7f8;
+  --primary-foreground: #16161a;
+  --secondary: #26262c;
+  --secondary-foreground: #f7f7f8;
+  --muted: #26262c;
+  --muted-foreground: #9a9aa2;
+  --accent: #e8a87c;
+  --accent-foreground: #16161a;
+  --destructive: #ef6b6b;
+  --destructive-foreground: #16161a;
+  --border: rgb(255 255 255 / 10%);
+  --input: rgb(255 255 255 / 15%);
+  --ring: #9a9aa2;
 }
 
 @theme inline {
@@ -80,6 +81,7 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-info: var(--info);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
@@ -96,11 +98,12 @@
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
 
-  --radius-sm: calc(var(--radius) - 8px);
-  --radius-md: calc(var(--radius) - 4px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-sm: calc(var(--radius) - 16px); /* 8px  */
+  --radius-md: calc(var(--radius) - 12px); /* 12px */
+  --radius-lg: calc(var(--radius) - 8px); /*  16px */
+  --radius-xl: calc(var(--radius) - 4px); /*  20px */
+  --radius-2xl: var(--radius); /*            24px */
+  --radius-3xl: var(--radius); /*            24px — cards */
 
   --font-sans:
     'Inter', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI',
@@ -119,6 +122,13 @@
     font-feature-settings:
       'cv11' 1,
       'ss01' 1;
+    background-image: linear-gradient(
+      to bottom,
+      var(--background) 0%,
+      var(--background) 55%,
+      #f2f2f5 100%
+    );
+    background-attachment: fixed;
   }
   input,
   select,
@@ -127,12 +137,23 @@
   }
 }
 
-/* Gentle entrance used across cards and dialogs. */
+/* Screen title: huge, bold, tight (per the CalAI benchmark). */
+@utility text-screen-title {
+  font-size: 1.9rem;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+/* Gentle entrances used across cards, sheets and wizard steps. */
 @utility animate-pop-in {
   animation: pop-in 0.35s cubic-bezier(0.21, 1.02, 0.73, 1) both;
 }
 @utility animate-toast-in {
   animation: toast-in 0.3s cubic-bezier(0.21, 1.02, 0.73, 1) both;
+}
+@utility animate-step-in {
+  animation: step-in 0.28s ease-out both;
 }
 @utility animate-wiggle {
   animation: wiggle 0.6s ease-in-out;
@@ -158,6 +179,16 @@
     transform: translateY(0) scale(1);
   }
 }
+@keyframes step-in {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
 @keyframes wiggle {
   0%,
   100% {
@@ -171,10 +202,64 @@
   }
 }
 
-/* Hide scrollbar for the onboarding carousel */
+/* Hide scrollbar for horizontal chip rows. */
 .no-scrollbar {
   scrollbar-width: none;
 }
 .no-scrollbar::-webkit-scrollbar {
   display: none;
+}
+
+/* Range input styled as the pace slider (thin track, big white thumb). */
+.helsa-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 44px; /* touch target */
+  background: transparent;
+  cursor: pointer;
+}
+.helsa-range:focus-visible {
+  outline: none;
+}
+.helsa-range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--secondary);
+}
+.helsa-range::-moz-range-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--secondary);
+}
+.helsa-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -11px;
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 2px solid var(--foreground);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.16);
+  transition: transform 120ms ease-out;
+}
+.helsa-range::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 2px solid var(--foreground);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.16);
+}
+.helsa-range:active::-webkit-slider-thumb {
+  transform: scale(1.1);
+}
+.helsa-range:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.helsa-range:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }

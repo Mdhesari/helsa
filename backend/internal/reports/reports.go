@@ -1,5 +1,6 @@
-// Package reports contains pure, timezone-aware aggregation over food logs:
-// period boundaries, per-local-day bucketing, averages, deltas and streaks.
+// Package reports contains pure, timezone-aware aggregation over tracked
+// data: period boundaries, per-local-day bucketing of food logs and workouts,
+// weight and habit series, averages, deltas and any-kind streaks.
 package reports
 
 import (
@@ -7,6 +8,8 @@ import (
 	"math"
 	"sort"
 	"time"
+
+	"helsa/backend/internal/nutrition"
 )
 
 // Totals is a sum (or average) of nutrients.
@@ -19,9 +22,41 @@ type Totals struct {
 
 // Bucket is one local day inside a report period.
 type Bucket struct {
-	Date     string `json:"date"` // YYYY-MM-DD in the user's timezone
-	Totals   Totals `json:"totals"`
-	LogCount int    `json:"log_count"`
+	Date           string  `json:"date"` // YYYY-MM-DD in the user's timezone
+	Totals         Totals  `json:"totals"`
+	LogCount       int     `json:"log_count"`
+	BurnedCalories float64 `json:"burned_calories"`
+	WorkoutCount   int     `json:"workout_count"`
+}
+
+// WeightPoint is the last weight entry of one local day.
+type WeightPoint struct {
+	Date     string  `json:"date"`
+	WeightKg float64 `json:"weight_kg"`
+}
+
+// HabitInfo is the Habit shape embedded in a report habit series.
+type HabitInfo struct {
+	ID          int64  `json:"id"`
+	Kind        string `json:"kind"`
+	Name        string `json:"name"`
+	Unit        string `json:"unit"`
+	Direction   string `json:"direction"`
+	DailyTarget *int64 `json:"daily_target"`
+	Archived    bool   `json:"archived"`
+	CreatedAt   string `json:"created_at"`
+}
+
+// CountPoint is a habit's summed count on one local day.
+type CountPoint struct {
+	Date  string `json:"date"`
+	Count int64  `json:"count"`
+}
+
+// HabitSeries is one habit's zero-filled per-day count series over a period.
+type HabitSeries struct {
+	Habit  HabitInfo    `json:"habit"`
+	Series []CountPoint `json:"series"`
 }
 
 // Deltas are (average − target) / target × 100 per nutrient, rounded to one
@@ -33,7 +68,7 @@ type Deltas struct {
 	FatPct      float64 `json:"fat_pct"`
 }
 
-// Streak describes logging streaks in local days.
+// Streak describes any-kind tracking streaks in local days.
 type Streak struct {
 	CurrentDays int `json:"current_days"`
 	LongestDays int `json:"longest_days"`
@@ -48,18 +83,25 @@ type LogRow struct {
 	FatG     float64
 }
 
+// WorkoutRow is the minimal projection of a workout needed for aggregation.
+type WorkoutRow struct {
+	LoggedAt int64 // unix seconds, UTC
+	Calories float64
+}
+
 // Stats bundles everything a report (and the AI insight prompt) needs.
 type Stats struct {
-	Period          string
-	StartDate       string
-	EndDate         string
-	Timezone        string
-	ProfileComplete bool
-	Targets         *Totals
-	Buckets         []Bucket
-	Averages        *Totals
-	Deltas          *Deltas
-	Streak          Streak
+	Period    string
+	StartDate string
+	EndDate   string
+	Timezone  string
+	Plan      nutrition.Plan
+	Buckets   []Bucket
+	Weights   []WeightPoint
+	Habits    []HabitSeries
+	Averages  *Totals
+	Deltas    *Deltas
+	Streak    Streak
 }
 
 // Bounds computes the inclusive local-day boundaries of a report period
@@ -87,20 +129,31 @@ func Bounds(period string, ref time.Time, loc *time.Location) (start, end time.T
 	return time.Time{}, time.Time{}, fmt.Errorf("invalid period %q", period)
 }
 
-// BucketByDay groups rows into one bucket per local day from start to end
-// (inclusive local midnights in loc), with zero totals for empty days.
-// Rows outside the range are ignored.
-func BucketByDay(rows []LogRow, start, end time.Time, loc *time.Location) []Bucket {
+// DayRange lists every local date key from start to end (inclusive local
+// midnights in loc) as YYYY-MM-DD strings.
+func DayRange(start, end time.Time) []string {
+	var days []string
+	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
+		days = append(days, d.Format("2006-01-02"))
+	}
+	return days
+}
+
+// BucketByDay groups food logs and workouts into one bucket per local day
+// from start to end (inclusive local midnights in loc), with zeros for empty
+// days. Rows outside the range are ignored.
+func BucketByDay(logs []LogRow, workouts []WorkoutRow, start, end time.Time, loc *time.Location) []Bucket {
 	var buckets []Bucket
 	index := make(map[string]int)
-	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
-		key := d.Format("2006-01-02")
+	for _, key := range DayRange(start, end) {
 		index[key] = len(buckets)
 		buckets = append(buckets, Bucket{Date: key})
 	}
-	for _, r := range rows {
-		key := time.Unix(r.LoggedAt, 0).In(loc).Format("2006-01-02")
-		i, ok := index[key]
+	dayKey := func(unix int64) string {
+		return time.Unix(unix, 0).In(loc).Format("2006-01-02")
+	}
+	for _, r := range logs {
+		i, ok := index[dayKey(r.LoggedAt)]
 		if !ok {
 			continue
 		}
@@ -111,11 +164,20 @@ func BucketByDay(rows []LogRow, start, end time.Time, loc *time.Location) []Buck
 		b.Totals.FatG += r.FatG
 		b.LogCount++
 	}
+	for _, w := range workouts {
+		i, ok := index[dayKey(w.LoggedAt)]
+		if !ok {
+			continue
+		}
+		b := &buckets[i]
+		b.BurnedCalories += w.Calories
+		b.WorkoutCount++
+	}
 	return buckets
 }
 
-// Averages computes the mean totals over days that have at least one log.
-// ok is false when no day in the period has a log.
+// Averages computes the mean totals over days that have at least one food
+// log. ok is false when no day in the period has a log.
 func Averages(buckets []Bucket) (Totals, bool) {
 	var sum Totals
 	days := 0
@@ -160,10 +222,21 @@ func DayIndex(t time.Time, loc *time.Location) int64 {
 	return time.Date(l.Year(), l.Month(), l.Day(), 0, 0, 0, 0, time.UTC).Unix() / 86400
 }
 
-// ComputeStreak computes the current and longest logging streaks.
-// days are local-day indexes (see DayIndex) of every log (duplicates fine);
+// DateIndex converts a YYYY-MM-DD local-date string (e.g. a diary entry key)
+// to the same day index space as DayIndex. ok is false for malformed dates.
+func DateIndex(date string) (int64, bool) {
+	t, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		return 0, false
+	}
+	return t.Unix() / 86400, true
+}
+
+// ComputeStreak computes the current and longest tracking streaks.
+// days are local-day indexes (see DayIndex) of every tracked item of any
+// kind — food log, workout, habit log or diary entry (duplicates fine);
 // today is the caller's current local-day index. The current streak counts
-// consecutive days ending today or yesterday — an unlogged "today" does not
+// consecutive days ending today or yesterday — an untracked "today" does not
 // break it until the day is over.
 func ComputeStreak(days []int64, today int64) Streak {
 	if len(days) == 0 {

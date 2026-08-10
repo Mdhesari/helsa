@@ -27,6 +27,7 @@ import { FoodSearchInput } from '../components/foods/FoodSearchInput'
 import { FoodSuggestions } from '../components/foods/FoodSuggestions'
 import { FoodResultList } from '../components/foods/FoodResultList'
 import { FoodDetailSheet } from '../components/foods/FoodDetailSheet'
+import { AppleIllustration } from '../assets/illustrations'
 
 const CHEERS = [
   'Logged! Nice one.',
@@ -63,11 +64,12 @@ export function LogFood() {
   })
 
   function celebrate(queued: boolean) {
+    // Cache invalidation lives in useLogFood, which knows whether the write
+    // reached the server or is still sitting in the outbox.
     toast.show(
       queued
         ? "Saved offline — it'll sync when you're back."
         : CHEERS[Math.floor(Math.random() * CHEERS.length)],
-      { pose: 'cheer' },
     )
   }
 
@@ -114,7 +116,7 @@ export function LogFood() {
           ) : searchQuery.isError ? (
             <Card>
               <EmptyState
-                pose="sleep"
+                illustration={<AppleIllustration size={72} />}
                 title={online ? 'Search failed' : 'Search needs a connection'}
                 body={
                   online
@@ -128,7 +130,7 @@ export function LogFood() {
           ) : (
             <Card>
               <EmptyState
-                pose="sleep"
+                illustration={<AppleIllustration size={72} />}
                 title={`No match for “${debouncedQuery}”`}
                 body="Can't find it? Create it once and it stays searchable."
               />
@@ -160,7 +162,7 @@ export function LogFood() {
         ) : logsQuery.isError ? (
           <Card>
             <EmptyState
-              pose="sleep"
+              illustration={<AppleIllustration size={72} />}
               title={online ? "Couldn't load today's logs" : 'Not synced yet'}
               body={
                 online
@@ -172,7 +174,7 @@ export function LogFood() {
         ) : (
           <Card>
             <EmptyState
-              pose="sleep"
+              illustration={<AppleIllustration size={72} />}
               title="Nothing yet today"
               body="Your first log of the day will appear right here."
             />

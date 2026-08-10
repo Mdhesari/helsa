@@ -10,23 +10,23 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          'bg-primary text-primary-foreground shadow-xs hover:bg-primary/90',
+          'bg-primary text-primary-foreground hover:bg-primary/90 disabled:bg-[#d9d9de] disabled:text-white disabled:opacity-100',
         destructive:
-          'bg-destructive text-destructive-foreground shadow-xs hover:bg-destructive/90',
+          'bg-destructive text-destructive-foreground hover:bg-destructive/90',
         outline:
-          'border border-input bg-background shadow-xs hover:bg-accent hover:text-accent-foreground',
+          'border border-input bg-card hover:bg-secondary hover:text-secondary-foreground',
         secondary:
-          'bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80',
-        ghost: 'hover:bg-accent hover:text-accent-foreground',
+          'bg-secondary text-secondary-foreground hover:bg-secondary/70',
+        ghost: 'hover:bg-secondary hover:text-secondary-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
       },
       size: {
-        default: 'h-10 px-5 py-2',
+        default: 'h-11 px-5 py-2',
         sm: 'h-9 gap-1.5 px-4',
         lg: 'h-12 px-6 text-base',
-        /** Full-bleed pill CTA used at the bottom of screens. */
+        /** Full-bleed pill CTA pinned at the bottom of screens (~56px). */
         xl: 'h-14 px-8 text-base font-semibold',
-        icon: 'size-10',
+        icon: 'size-11',
         'icon-sm': 'size-9',
       },
     },

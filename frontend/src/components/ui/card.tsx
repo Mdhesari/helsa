@@ -2,12 +2,13 @@ import * as React from 'react'
 
 import { cn } from '@/lib/utils'
 
+/** CalAI-style surface: pure white, hairline border, 24px radius, no shadow. */
 function Card({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="card"
       className={cn(
-        'bg-card text-card-foreground flex flex-col gap-5 rounded-2xl border py-5 shadow-[0_1px_2px_rgb(0_0_0/0.03),0_4px_16px_rgb(0_0_0/0.04)]',
+        'bg-card text-card-foreground flex flex-col gap-5 rounded-3xl border py-5',
         className,
       )}
       {...props}
@@ -47,11 +48,7 @@ function CardDescription({ className, ...props }: React.ComponentProps<'div'>) {
 
 function CardContent({ className, ...props }: React.ComponentProps<'div'>) {
   return (
-    <div
-      data-slot="card-content"
-      className={cn('px-5', className)}
-      {...props}
-    />
+    <div data-slot="card-content" className={cn('px-5', className)} {...props} />
   )
 }
 
