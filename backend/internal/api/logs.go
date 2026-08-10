@@ -76,10 +76,6 @@ type logPatch struct {
 	ClientKey *string `json:"client_key"`
 }
 
-// maxClientKeyLen bounds the client-supplied idempotency key. The client sends
-// a UUID (36 chars); anything longer is a caller bug or an abuse attempt.
-const maxClientKeyLen = 64
-
 // apply merges the patch into l, validating per the contract. Returns a
 // human-readable validation error.
 func (p logPatch) apply(l *foodLog) error {
@@ -169,14 +165,11 @@ func (s *Server) handleCreateLog(w http.ResponseWriter, r *http.Request) {
 	if !s.validateFoodRef(w, r, u.ID, l) {
 		return
 	}
-	if req.ClientKey != nil {
-		key := strings.TrimSpace(*req.ClientKey)
-		if key == "" || len(key) > maxClientKeyLen {
-			badRequest(w, "client_key must be 1-64 characters")
-			return
-		}
-		l.ClientKey = sql.NullString{String: key, Valid: true}
+	clientKey, ok := parseClientKey(w, req.ClientKey)
+	if !ok {
+		return
 	}
+	l.ClientKey = clientKey
 
 	// The offline outbox retries queued writes, and a retry may follow a request
 	// that reached us but whose response was lost. ON CONFLICT DO NOTHING makes
@@ -302,10 +295,7 @@ func (s *Server) handleUpdateLog(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, err.Error())
 		return
 	}
-	// client_key identifies the originating offline write; letting an update
-	// move it would break replay dedup for whichever row held it.
-	if req.ClientKey != nil {
-		badRequest(w, "client_key cannot be changed")
+	if !rejectClientKeyOnUpdate(w, req.ClientKey) {
 		return
 	}
 	if err := req.apply(&l); err != nil {

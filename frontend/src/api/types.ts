@@ -310,6 +310,8 @@ export interface WorkoutInput {
   notes?: string
   /** Optional; default now. */
   logged_at?: string
+  /** Idempotency key for offline replay (POST only). */
+  client_key?: string
 }
 
 export interface WorkoutsResponse {
@@ -323,6 +325,8 @@ export interface WeightInput {
   weight_kg: number
   /** Optional; default now. */
   measured_at?: string
+  /** Idempotency key for offline replay (POST only). */
+  client_key?: string
 }
 
 export interface WeightsResponse {
@@ -357,6 +361,8 @@ export interface HabitLogInput {
   /** Default 1; range 1–100. */
   count?: number
   logged_at?: string
+  /** Idempotency key for offline replay (POST only). */
+  client_key?: string
 }
 
 export interface HabitLogsResponse {

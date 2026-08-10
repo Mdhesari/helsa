@@ -68,7 +68,8 @@ CREATE TABLE IF NOT EXISTS workouts (
     calories_estimated INTEGER NOT NULL DEFAULT 0,
     notes              TEXT    NOT NULL DEFAULT '',
     logged_at          INTEGER NOT NULL, -- unix seconds, UTC
-    created_at         INTEGER NOT NULL
+    created_at         INTEGER NOT NULL,
+    client_key         TEXT -- offline replay dedup; see internal/api/idempotency.go
 );
 
 CREATE INDEX IF NOT EXISTS idx_workouts_user_logged_at ON workouts(user_id, logged_at);
@@ -79,7 +80,8 @@ CREATE TABLE IF NOT EXISTS weights (
     user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     weight_kg   REAL    NOT NULL CHECK (weight_kg BETWEEN 20 AND 400),
     measured_at INTEGER NOT NULL, -- unix seconds, UTC
-    created_at  INTEGER NOT NULL
+    created_at  INTEGER NOT NULL,
+    client_key  TEXT -- offline replay dedup; see internal/api/idempotency.go
 );
 
 CREATE INDEX IF NOT EXISTS idx_weights_user_measured_at ON weights(user_id, measured_at);
@@ -104,7 +106,8 @@ CREATE TABLE IF NOT EXISTS habit_logs (
     habit_id   INTEGER NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
     count      INTEGER NOT NULL CHECK (count BETWEEN 1 AND 100),
     logged_at  INTEGER NOT NULL, -- unix seconds, UTC
-    created_at INTEGER NOT NULL
+    created_at INTEGER NOT NULL,
+    client_key TEXT -- offline replay dedup; see internal/api/idempotency.go
 );
 
 CREATE INDEX IF NOT EXISTS idx_habit_logs_habit_logged_at ON habit_logs(habit_id, logged_at);

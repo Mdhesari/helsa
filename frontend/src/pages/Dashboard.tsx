@@ -8,9 +8,10 @@ import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import * as api from '../api/client'
 import { errorMessage } from '../api/client'
-import type { DashboardHabit, Workout } from '../api/types'
+import type { DashboardHabit, DashboardResponse, Workout } from '../api/types'
 import { invalidateHabitData, qk } from '../lib/queries'
 import { formatTime } from '../lib/date'
+import { useOfflineWrite } from '../lib/useOfflineWrite'
 import { useOnline } from '../lib/useOutbox'
 import { Ring } from '../components/Ring'
 import { EmptyState } from '../components/EmptyState'
@@ -36,6 +37,7 @@ const MACROS = [
 
 function HabitChip({ item }: { item: DashboardHabit }) {
   const qc = useQueryClient()
+  const write = useOfflineWrite()
   const Icon = HABIT_ICONS[item.habit.kind]
   const target = item.habit.daily_target
 
@@ -47,8 +49,31 @@ function HabitChip({ item }: { item: DashboardHabit }) {
     item.habit.direction === 'build' && target !== null && item.count >= target
 
   const log = useMutation({
-    mutationFn: () => api.createHabitLog(item.habit.id),
-    onSuccess: () => invalidateHabitData(qc),
+    mutationFn: () =>
+      write({
+        payload: { kind: 'habit-log', habitId: item.habit.id, input: {} },
+        send: () => api.createHabitLog(item.habit.id),
+        onSent: () => invalidateHabitData(qc),
+        onQueued: () => {
+          // Bump the count locally so a tap made offline still registers; the
+          // real total arrives when the queue drains.
+          qc.setQueryData<DashboardResponse>(qk.dashboard, (prev) =>
+            prev
+              ? {
+                  ...prev,
+                  today: {
+                    ...prev.today,
+                    habits: prev.today.habits.map((h) =>
+                      h.habit.id === item.habit.id
+                        ? { ...h, count: h.count + 1 }
+                        : h,
+                    ),
+                  },
+                }
+              : prev,
+          )
+        },
+      }),
   })
 
   return (

@@ -3,6 +3,7 @@ package api_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -273,5 +274,100 @@ func TestCreateLogClientKeyIsIdempotent(t *testing.T) {
 	doJSON(t, http.MethodGet, base+"/logs", token, nil, &logs)
 	if len(logs.Logs) != 3 {
 		t.Fatalf("got %d logs, want 3 (1 keyed + 2 unkeyed)", len(logs.Logs))
+	}
+}
+
+// The outbox replays queued workouts, weights and habit logs the same way it
+// replays food logs; none of them may duplicate on retry.
+func TestCreateClientKeyIsIdempotentAcrossKinds(t *testing.T) {
+	sqlDB, err := db.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sqlDB.Close()
+
+	srv := httptest.NewServer(api.New(sqlDB, "test-secret", insights.StubProvider{}).Handler())
+	defer srv.Close()
+	base := srv.URL + "/api/v1"
+
+	var reg struct {
+		Token string `json:"token"`
+	}
+	doJSON(t, http.MethodPost, base+"/auth/register", "", map[string]any{
+		"full_name": "Grace H", "email": "grace@x.com", "password": "secret123",
+	}, &reg)
+	token := reg.Token
+
+	// A habit to hang habit logs off.
+	var habit struct {
+		ID int64 `json:"id"`
+	}
+	doJSON(t, http.MethodPost, base+"/habits", token, map[string]any{
+		"kind": "water", "name": "Water", "unit": "glass",
+		"direction": "build", "daily_target": 8,
+	}, &habit)
+
+	cases := []struct {
+		name   string
+		path   string
+		body   map[string]any
+		listAt string
+		field  string
+	}{
+		{
+			name:   "workout",
+			path:   "/workouts",
+			body:   map[string]any{"activity": "running", "duration_min": 30, "client_key": "wk-1"},
+			listAt: "/workouts",
+			field:  "workouts",
+		},
+		{
+			name:   "weight",
+			path:   "/weights",
+			body:   map[string]any{"weight_kg": 72.5, "client_key": "wt-1"},
+			listAt: "/weights",
+			field:  "entries",
+		},
+		{
+			name:   "habit log",
+			path:   fmt.Sprintf("/habits/%d/logs", habit.ID),
+			body:   map[string]any{"count": 1, "client_key": "hb-1"},
+			listAt: fmt.Sprintf("/habits/%d/logs", habit.ID),
+			field:  "logs",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var first struct {
+				ID int64 `json:"id"`
+			}
+			if resp := doJSON(t, http.MethodPost, base+tc.path, token, tc.body, &first); resp.StatusCode != http.StatusCreated {
+				t.Fatalf("first create = %d, want 201", resp.StatusCode)
+			}
+
+			var replay struct {
+				ID int64 `json:"id"`
+			}
+			resp := doJSON(t, http.MethodPost, base+tc.path, token, tc.body, &replay)
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("replay = %d, want 200", resp.StatusCode)
+			}
+			if replay.ID != first.ID {
+				t.Errorf("replay id = %d, want the original %d", replay.ID, first.ID)
+			}
+
+			var list map[string]json.RawMessage
+			doJSON(t, http.MethodGet, base+tc.listAt, token, nil, &list)
+			var rows []struct {
+				ID int64 `json:"id"`
+			}
+			if err := json.Unmarshal(list[tc.field], &rows); err != nil {
+				t.Fatalf("decode %s: %v", tc.field, err)
+			}
+			if len(rows) != 1 {
+				t.Fatalf("got %d %s after replay, want 1", len(rows), tc.field)
+			}
+		})
 	}
 }

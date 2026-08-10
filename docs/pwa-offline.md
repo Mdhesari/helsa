@@ -52,10 +52,29 @@ handler registered by `AuthContext` when a 401 clears the session.
 
 ## Offline writes — the outbox
 
-`lib/outbox.ts` queues food logs in IndexedDB when there is no connection, and
-`lib/useLogFood.ts` decides per write whether to POST or queue. Queued entries
-appear immediately in today's list marked *Waiting to sync*, with edit/delete
-disabled (they have no server id yet).
+`lib/outbox.ts` queues writes in IndexedDB when there is no connection.
+`lib/useOfflineWrite.ts` holds the shared "send now or queue durably" decision;
+each caller supplies how to perform the write online plus the payload to queue
+if it cannot.
+
+Queueable today (`OutboxPayload`):
+
+| Kind | Written from | Optimistic feedback |
+|---|---|---|
+| `log`, `custom-food` | Log food | appears in today's list, marked *Waiting to sync* |
+| `workout` | Workout sheet | toast; calories are filled in by the server on sync |
+| `weight` | Weight sheet | toast |
+| `habit-log` | Dashboard habit chip | count bumps immediately |
+
+Structural writes — creating a habit, editing the plan, registering — are
+deliberately **not** queued: they are rare, need server-assigned ids, and a
+stale replay of them is worse than an honest error.
+
+The diary is a `PUT` upsert keyed on `(user, date)`, so it is already idempotent
+by construction and needs no `client_key`; it is not queued today.
+
+Queued food logs show with edit/delete disabled, since they have no server id
+until they sync.
 
 Replay happens on reconnect, on return to the foreground, and at startup
 (`lib/useOutbox.ts`) — iOS fires neither `online` nor `visibilitychange`
@@ -68,11 +87,16 @@ Two decisions worth keeping:
   bypass the outbox entirely — and its own paused queue is in-memory, so iOS
   discards it when it evicts the tab. Queries keep the default, which correctly
   serves persisted cache offline.
-- **Server-side idempotency.** Every queued log carries a `client_key` UUID and
-  the server treats `(user_id, client_key)` as unique. A retry after a lost
-  response returns the original log (200) instead of creating a duplicate —
-  without this, flaky mobile networks would silently inflate calorie totals.
-  See `docs/api-contract.md` and `TestCreateLogClientKeyIsIdempotent`.
+- **Server-side idempotency.** Every queued write carries a `client_key` UUID
+  (the outbox entry id) and the server treats it as unique per owner. A retry
+  after a lost response returns the original row (200) instead of creating a
+  duplicate — without this, flaky mobile networks would silently inflate
+  calorie totals, burned calories and habit counts. Implemented for
+  `/logs`, `/workouts`, `/weights` and `/habits/{id}/logs`; the shared helpers
+  live in `backend/internal/api/idempotency.go`. Habit logs scope the key by
+  `habit_id`, since that table has no `user_id`. Covered by
+  `TestCreateLogClientKeyIsIdempotent` and
+  `TestCreateClientKeyIsIdempotentAcrossKinds`.
 
 Entries that fail permanently (4xx other than 401/408/429) are dropped rather
 than retried forever, since they would block everything queued behind them.

@@ -51,16 +51,27 @@ func Open(path string) (*sql.DB, error) {
 		sqlDB.Close()
 		return nil, fmt.Errorf("index food_logs.food_ref_id: %w", err)
 	}
-	// Same story for client_key, added with the offline outbox.
-	if err := ensureColumn(sqlDB, "food_logs", "client_key", "client_key TEXT"); err != nil {
-		sqlDB.Close()
-		return nil, fmt.Errorf("migrate food_logs.client_key: %w", err)
-	}
-	if _, err := sqlDB.Exec(
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_food_logs_client_key
-		 ON food_logs(user_id, client_key) WHERE client_key IS NOT NULL`); err != nil {
-		sqlDB.Close()
-		return nil, fmt.Errorf("index food_logs.client_key: %w", err)
+	// Same story for client_key, added with the offline outbox: every table
+	// backing an offline-queueable write gets one, scoped by whichever column
+	// makes the key unique per user. Partial index so unlimited NULL rows
+	// (ordinary online writes) coexist.
+	for _, t := range []struct{ table, scope string }{
+		{"food_logs", "user_id"},
+		{"workouts", "user_id"},
+		{"weights", "user_id"},
+		{"habit_logs", "habit_id"}, // habit_logs has no user_id; habit ownership scopes it
+	} {
+		if err := ensureColumn(sqlDB, t.table, "client_key", "client_key TEXT"); err != nil {
+			sqlDB.Close()
+			return nil, fmt.Errorf("migrate %s.client_key: %w", t.table, err)
+		}
+		if _, err := sqlDB.Exec(fmt.Sprintf(
+			`CREATE UNIQUE INDEX IF NOT EXISTS idx_%s_client_key
+			 ON %s(%s, client_key) WHERE client_key IS NOT NULL`,
+			t.table, t.table, t.scope)); err != nil {
+			sqlDB.Close()
+			return nil, fmt.Errorf("index %s.client_key: %w", t.table, err)
+		}
 	}
 	if err := fooddata.Seed(sqlDB); err != nil {
 		sqlDB.Close()

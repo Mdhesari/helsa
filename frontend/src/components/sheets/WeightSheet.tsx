@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import * as api from '../../api/client'
 import { errorMessage } from '../../api/client'
 import { invalidateWeightData } from '../../lib/queries'
+import { useOfflineWrite } from '../../lib/useOfflineWrite'
 import { UnitToggle, WeightField } from '../plan/pickers'
 import type { UnitSystem } from '../onboarding/wizardState'
 import { useToast } from '../Toast'
@@ -27,6 +28,7 @@ interface WeightSheetProps {
 export function WeightSheet({ open, onClose, initialKg = null }: WeightSheetProps) {
   const qc = useQueryClient()
   const toast = useToast()
+  const write = useOfflineWrite()
 
   const [unit, setUnit] = useState<UnitSystem>('metric')
   const [weightKg, setWeightKg] = useState<number | null>(initialKg)
@@ -40,11 +42,17 @@ export function WeightSheet({ open, onClose, initialKg = null }: WeightSheetProp
   const create = useMutation({
     mutationFn: () => {
       if (weightKg === null) throw new Error('weight required')
-      return api.createWeight({ weight_kg: weightKg })
+      const input = { weight_kg: weightKg }
+      return write({
+        payload: { kind: 'weight', input },
+        send: () => api.createWeight(input),
+        onSent: () => invalidateWeightData(qc),
+      })
     },
-    onSuccess: () => {
-      invalidateWeightData(qc)
-      toast.show('Weight logged')
+    onSuccess: ({ queued }) => {
+      toast.show(
+        queued ? "Saved offline — it'll sync when you're back." : 'Weight logged',
+      )
       onClose()
     },
     onError: (e) => toast.show(errorMessage(e), { tone: 'error' }),

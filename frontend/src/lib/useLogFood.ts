@@ -2,13 +2,11 @@ import { useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 
 import * as api from '../api/client'
-import { isApiError } from '../api/client'
 import type { FoodLog, FoodLogInput, LogsResponse } from '../api/types'
-import { useAuth } from '../auth/AuthContext'
 import { todayStr } from './date'
-import { tapSuccess } from './native'
 import * as outbox from './outbox'
 import { invalidateFoodData, invalidateFoodRefData, qk } from './queries'
+import { useOfflineWrite } from './useOfflineWrite'
 
 /**
  * Writing a food log, online or off.
@@ -23,8 +21,15 @@ export function isPendingLog(log: FoodLog): boolean {
   return log.id < 0
 }
 
+/** A queued entry that will become a food log. */
+type FoodOutboxEntry = outbox.OutboxEntry & { kind: 'log' | 'custom-food' }
+
+function isFoodEntry(entry: outbox.OutboxEntry): entry is FoodOutboxEntry {
+  return entry.kind === 'log' || entry.kind === 'custom-food'
+}
+
 /** Optimistic FoodLog for a queued entry, rendered until it syncs. */
-function toOptimisticLog(entry: outbox.OutboxEntry): FoodLog {
+function toOptimisticLog(entry: FoodOutboxEntry): FoodLog {
   const now = new Date(entry.createdAt).toISOString()
   return {
     // Negative, derived from createdAt: stable across re-renders and never
@@ -42,70 +47,53 @@ function toOptimisticLog(entry: outbox.OutboxEntry): FoodLog {
   }
 }
 
-/** Network-ish failures are worth queueing; a 400 is not. */
-function isRetryable(err: unknown): boolean {
-  if (!isApiError(err)) return true // fetch rejected — offline or DNS/TLS
-  return err.status >= 500 || err.status === 408 || err.status === 429
-}
-
 export interface LogFoodResult {
   queued: boolean
 }
 
 export function useLogFood() {
   const qc = useQueryClient()
-  const { user } = useAuth()
+  const write = useOfflineWrite()
 
   return useCallback(
-    async (
+    (
       input: FoodLogInput,
-      kind: outbox.OutboxKind = 'log',
-    ): Promise<LogFoodResult> => {
-      if (!user) throw new Error('must be signed in to log food')
-
-      // Confirms the meal landed even when the screen is not being watched.
-      void tapSuccess()
-
-      const queue = async (): Promise<LogFoodResult> => {
-        const entry = await outbox.enqueue(kind, input, user.id)
-        // Show it in today's list right away. Dashboard totals stay server-owned
-        // and catch up on sync — inventing them here would drift from the
-        // server's timezone-aware day boundaries.
-        qc.setQueryData<LogsResponse>(qk.logs(todayStr()), (prev) => ({
-          logs: [...(prev?.logs ?? []), toOptimisticLog(entry)],
-        }))
-        return { queued: true }
-      }
-
-      if (!navigator.onLine) return queue()
-
-      try {
-        if (kind === 'custom-food') {
-          const food = await api.createFood({
-            name: input.food_name,
-            serving_label: input.serving || undefined,
-            calories: input.calories,
-            protein_g: input.protein_g,
-            carbs_g: input.carbs_g,
-            fat_g: input.fat_g,
-          })
-          await api.createLog({
-            ...input,
-            serving: input.serving || food.servings[0]?.label || '1 serving',
-            food_ref_id: food.id,
-          })
-          invalidateFoodRefData(qc)
-        } else {
+      kind: 'log' | 'custom-food' = 'log',
+    ): Promise<LogFoodResult> =>
+      write({
+        payload: { kind, input },
+        send: async () => {
+          if (kind === 'custom-food') {
+            const food = await api.createFood({
+              name: input.food_name,
+              serving_label: input.serving || undefined,
+              calories: input.calories,
+              protein_g: input.protein_g,
+              carbs_g: input.carbs_g,
+              fat_g: input.fat_g,
+            })
+            await api.createLog({
+              ...input,
+              serving: input.serving || food.servings[0]?.label || '1 serving',
+              food_ref_id: food.id,
+            })
+            invalidateFoodRefData(qc)
+            return
+          }
           await api.createLog(input)
-        }
-        invalidateFoodData(qc)
-        return { queued: false }
-      } catch (err) {
-        if (isRetryable(err)) return queue()
-        throw err // 400s and the like are real errors — surface them.
-      }
-    },
-    [qc, user],
+        },
+        onSent: () => invalidateFoodData(qc),
+        onQueued: (entry) => {
+          if (!isFoodEntry(entry)) return // unreachable: payload is a food kind
+          // Show it in today's list right away. Dashboard totals stay
+          // server-owned and catch up on sync — inventing them here would drift
+          // from the server's timezone-aware day boundaries.
+          qc.setQueryData<LogsResponse>(qk.logs(todayStr()), (prev) => ({
+            logs: [...(prev?.logs ?? []), toOptimisticLog(entry)],
+          }))
+        },
+      }),
+    [qc, write],
   )
 }
 
@@ -116,6 +104,7 @@ export function useLogFood() {
 export function useMergedPendingLogs(logs: FoodLog[], entries: outbox.OutboxEntry[]) {
   const known = new Set(logs.map((l) => l.id))
   const extra = entries
+    .filter(isFoodEntry)
     .map(toOptimisticLog)
     .filter((l) => !known.has(l.id))
   return [...logs, ...extra].sort(

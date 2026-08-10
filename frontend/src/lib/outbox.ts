@@ -2,7 +2,13 @@ import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
 
 import * as api from '../api/client'
 import { isApiError } from '../api/client'
-import type { CustomFoodInput, FoodLog, FoodLogInput } from '../api/types'
+import type {
+  CustomFoodInput,
+  FoodLogInput,
+  HabitLogInput,
+  WeightInput,
+  WorkoutInput,
+} from '../api/types'
 
 /**
  * Offline write queue.
@@ -17,13 +23,24 @@ import type { CustomFoodInput, FoodLog, FoodLogInput } from '../api/types'
  * original log rather than creating a duplicate. See docs/api-contract.md.
  */
 
-export type OutboxKind = 'log' | 'custom-food'
+/**
+ * Queueable writes. Each variant carries the payload its endpoint expects; the
+ * entry id doubles as the server-side `client_key`, so every one of these
+ * endpoints dedups replays. Structural writes (creating a habit, editing the
+ * plan) are deliberately absent — they are rare, and need a connection anyway.
+ */
+export type OutboxPayload =
+  | { kind: 'log'; input: FoodLogInput }
+  | { kind: 'custom-food'; input: FoodLogInput }
+  | { kind: 'workout'; input: WorkoutInput }
+  | { kind: 'weight'; input: WeightInput }
+  | { kind: 'habit-log'; habitId: number; input: HabitLogInput }
 
-export interface OutboxEntry {
+export type OutboxKind = OutboxPayload['kind']
+
+export type OutboxEntry = OutboxPayload & {
   /** Also the server-side idempotency key. */
   id: string
-  kind: OutboxKind
-  input: FoodLogInput
   /** Owner of the queued write; entries are never replayed for another user. */
   userId: number
   createdAt: number
@@ -89,14 +106,12 @@ function emit(): void {
 // ---------- Queue operations ----------
 
 export async function enqueue(
-  kind: OutboxKind,
-  input: FoodLogInput,
+  payload: OutboxPayload,
   userId: number,
 ): Promise<OutboxEntry> {
   const entry: OutboxEntry = {
+    ...payload,
     id: newKey(),
-    kind,
-    input,
     userId,
     createdAt: Date.now(),
     attempts: 0,
@@ -166,7 +181,7 @@ async function runFlush(userId: number): Promise<FlushResult> {
         continue
       }
       // Offline again, or a server error: stop and keep the rest queued in
-      // order, so meals sync in the order they were eaten.
+      // order, so entries sync in the order they happened.
       await bumpAttempt(entry, err)
       break
     }
@@ -175,28 +190,45 @@ async function runFlush(userId: number): Promise<FlushResult> {
   return result
 }
 
-async function send(entry: OutboxEntry): Promise<FoodLog> {
-  if (entry.kind === 'custom-food') {
-    // Recreate the reference food, then log it. createFood is not idempotent,
-    // so a replay can leave a duplicate custom food; the log itself is still
-    // deduplicated by client_key, which is what the totals depend on.
-    const input: CustomFoodInput = {
-      name: entry.input.food_name,
-      serving_label: entry.input.serving || undefined,
-      calories: entry.input.calories,
-      protein_g: entry.input.protein_g,
-      carbs_g: entry.input.carbs_g,
-      fat_g: entry.input.fat_g,
+/** Replays one queued write. `entry.id` is the server-side idempotency key. */
+async function send(entry: OutboxEntry): Promise<unknown> {
+  switch (entry.kind) {
+    case 'log':
+      return api.createLog({ ...entry.input, client_key: entry.id })
+
+    case 'custom-food': {
+      // Recreate the reference food, then log it. createFood is not idempotent,
+      // so a replay can leave a duplicate custom food; the log itself is still
+      // deduplicated by client_key, which is what the totals depend on.
+      const input: CustomFoodInput = {
+        name: entry.input.food_name,
+        serving_label: entry.input.serving || undefined,
+        calories: entry.input.calories,
+        protein_g: entry.input.protein_g,
+        carbs_g: entry.input.carbs_g,
+        fat_g: entry.input.fat_g,
+      }
+      const food = await api.createFood(input)
+      return api.createLog({
+        ...entry.input,
+        serving: entry.input.serving || food.servings[0]?.label || '1 serving',
+        food_ref_id: food.id,
+        client_key: entry.id,
+      })
     }
-    const food = await api.createFood(input)
-    return api.createLog({
-      ...entry.input,
-      serving: entry.input.serving || food.servings[0]?.label || '1 serving',
-      food_ref_id: food.id,
-      client_key: entry.id,
-    })
+
+    case 'workout':
+      return api.createWorkout({ ...entry.input, client_key: entry.id })
+
+    case 'weight':
+      return api.createWeight({ ...entry.input, client_key: entry.id })
+
+    case 'habit-log':
+      return api.createHabitLog(entry.habitId, {
+        ...entry.input,
+        client_key: entry.id,
+      })
   }
-  return api.createLog({ ...entry.input, client_key: entry.id })
 }
 
 /** 4xx other than 401/408/429 will never succeed on retry. */

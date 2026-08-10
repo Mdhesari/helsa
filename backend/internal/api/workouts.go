@@ -23,6 +23,7 @@ type workout struct {
 	Notes       string
 	LoggedAt    int64
 	CreatedAt   int64
+	ClientKey   sql.NullString
 }
 
 // workoutJSON is the Workout shape from the contract; calories is always set
@@ -63,6 +64,8 @@ type workoutPatch struct {
 	Calories    json.RawMessage `json:"calories"`
 	Notes       *string         `json:"notes"`
 	LoggedAt    *string         `json:"logged_at"`
+	// Idempotency key for offline replay, POST only.
+	ClientKey *string `json:"client_key"`
 }
 
 // apply merges the patch into x, validating per the contract. estimate
@@ -164,12 +167,35 @@ func (s *Server) handleCreateWorkout(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	clientKey, ok := parseClientKey(w, req.ClientKey)
+	if !ok {
+		return
+	}
+	x.ClientKey = clientKey
+
+	// See internal/api/idempotency.go: a replayed key must not add a second
+	// workout, which would inflate the day's burned calories.
 	res, err := s.db.ExecContext(r.Context(),
-		`INSERT INTO workouts (user_id, activity, duration_min, intensity, calories, calories_estimated, notes, logged_at, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		u.ID, x.Activity, x.DurationMin, x.Intensity, x.Calories, x.Estimated, x.Notes, x.LoggedAt, x.CreatedAt)
+		`INSERT INTO workouts (user_id, activity, duration_min, intensity, calories, calories_estimated, notes, logged_at, created_at, client_key)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 ON CONFLICT (user_id, client_key) WHERE client_key IS NOT NULL DO NOTHING`,
+		u.ID, x.Activity, x.DurationMin, x.Intensity, x.Calories, x.Estimated, x.Notes, x.LoggedAt, x.CreatedAt, x.ClientKey)
 	if err != nil {
 		internalError(w, err)
+		return
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if n == 0 {
+		existing, err := s.getWorkoutByClientKey(r.Context(), u.ID, x.ClientKey.String)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, toWorkoutJSON(existing))
 		return
 	}
 	x.ID, err = res.LastInsertId()
@@ -178,6 +204,16 @@ func (s *Server) handleCreateWorkout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, toWorkoutJSON(x))
+}
+
+// getWorkoutByClientKey loads the workout a replayed client_key already created.
+func (s *Server) getWorkoutByClientKey(ctx context.Context, userID int64, key string) (workout, error) {
+	var x workout
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id, activity, duration_min, intensity, calories, calories_estimated, notes, logged_at, created_at, client_key
+		 FROM workouts WHERE user_id = ? AND client_key = ?`, userID, key,
+	).Scan(&x.ID, &x.Activity, &x.DurationMin, &x.Intensity, &x.Calories, &x.Estimated, &x.Notes, &x.LoggedAt, &x.CreatedAt, &x.ClientKey)
+	return x, err
 }
 
 func (s *Server) handleListWorkouts(w http.ResponseWriter, r *http.Request) {
@@ -244,6 +280,9 @@ func (s *Server) handleUpdateWorkout(w http.ResponseWriter, r *http.Request) {
 	var req workoutPatch
 	if err := decodeBody(r, &req); err != nil {
 		badRequest(w, err.Error())
+		return
+	}
+	if !rejectClientKeyOnUpdate(w, req.ClientKey) {
 		return
 	}
 	estimate, err := req.apply(&x, false)

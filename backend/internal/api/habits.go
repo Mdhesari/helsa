@@ -312,6 +312,8 @@ func (s *Server) handleCreateHabitLog(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Count    *int64  `json:"count"`
 		LoggedAt *string `json:"logged_at"`
+		// Idempotency key for offline replay.
+		ClientKey *string `json:"client_key"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		badRequest(w, err.Error())
@@ -335,11 +337,42 @@ func (s *Server) handleCreateHabitLog(w http.ResponseWriter, r *http.Request) {
 		}
 		loggedAt = t.Unix()
 	}
+	clientKey, ok := parseClientKey(w, req.ClientKey)
+	if !ok {
+		return
+	}
+
+	// See internal/api/idempotency.go. Habit logs are the most frequently
+	// replayed write (a tap per cigarette or glass of water), so a duplicate
+	// here would visibly distort the day's count. Scoped by habit_id, since
+	// habit_logs has no user_id column.
 	res, err := s.db.ExecContext(r.Context(),
-		`INSERT INTO habit_logs (habit_id, count, logged_at, created_at) VALUES (?, ?, ?, ?)`,
-		id, count, loggedAt, now.Unix())
+		`INSERT INTO habit_logs (habit_id, count, logged_at, created_at, client_key) VALUES (?, ?, ?, ?, ?)
+		 ON CONFLICT (habit_id, client_key) WHERE client_key IS NOT NULL DO NOTHING`,
+		id, count, loggedAt, now.Unix(), clientKey)
 	if err != nil {
 		internalError(w, err)
+		return
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if n == 0 {
+		var existing habitLogJSON
+		var loggedUnix, createdUnix int64
+		if err := s.db.QueryRowContext(r.Context(),
+			`SELECT id, count, logged_at, created_at FROM habit_logs WHERE habit_id = ? AND client_key = ?`,
+			id, clientKey.String,
+		).Scan(&existing.ID, &existing.Count, &loggedUnix, &createdUnix); err != nil {
+			internalError(w, err)
+			return
+		}
+		existing.HabitID = id
+		existing.LoggedAt = rfc3339(loggedUnix)
+		existing.CreatedAt = rfc3339(createdUnix)
+		writeJSON(w, http.StatusOK, existing)
 		return
 	}
 	logID, err := res.LastInsertId()

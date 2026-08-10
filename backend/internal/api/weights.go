@@ -16,6 +16,17 @@ type weightEntry struct {
 	WeightKg   float64
 	MeasuredAt int64
 	CreatedAt  int64
+	ClientKey  sql.NullString
+}
+
+// getWeightByClientKey loads the entry a replayed client_key already created.
+func (s *Server) getWeightByClientKey(ctx context.Context, userID int64, key string) (weightEntry, error) {
+	var e weightEntry
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id, weight_kg, measured_at, created_at, client_key
+		 FROM weights WHERE user_id = ? AND client_key = ?`, userID, key,
+	).Scan(&e.ID, &e.WeightKg, &e.MeasuredAt, &e.CreatedAt, &e.ClientKey)
+	return e, err
 }
 
 // weightJSON is the WeightEntry shape from the contract.
@@ -40,6 +51,8 @@ func (s *Server) handleCreateWeight(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		WeightKg   *float64 `json:"weight_kg"`
 		MeasuredAt *string  `json:"measured_at"`
+		// Idempotency key for offline replay.
+		ClientKey *string `json:"client_key"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		badRequest(w, err.Error())
@@ -59,11 +72,36 @@ func (s *Server) handleCreateWeight(w http.ResponseWriter, r *http.Request) {
 		}
 		e.MeasuredAt = t.Unix()
 	}
+	clientKey, ok := parseClientKey(w, req.ClientKey)
+	if !ok {
+		return
+	}
+	e.ClientKey = clientKey
+
+	// See internal/api/idempotency.go. Replaying must not add a second
+	// measurement, which would put a phantom point on the weight chart.
 	res, err := s.db.ExecContext(r.Context(),
-		`INSERT INTO weights (user_id, weight_kg, measured_at, created_at) VALUES (?, ?, ?, ?)`,
-		u.ID, e.WeightKg, e.MeasuredAt, e.CreatedAt)
+		`INSERT INTO weights (user_id, weight_kg, measured_at, created_at, client_key) VALUES (?, ?, ?, ?, ?)
+		 ON CONFLICT (user_id, client_key) WHERE client_key IS NOT NULL DO NOTHING`,
+		u.ID, e.WeightKg, e.MeasuredAt, e.CreatedAt, e.ClientKey)
 	if err != nil {
 		internalError(w, err)
+		return
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if n == 0 {
+		// Already stored. Return the original without re-running the profile
+		// side effect — it was applied when the row was first created.
+		existing, err := s.getWeightByClientKey(r.Context(), u.ID, e.ClientKey.String)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, toWeightJSON(existing))
 		return
 	}
 	e.ID, err = res.LastInsertId()

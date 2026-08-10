@@ -27,8 +27,14 @@ import { SegmentedControl } from '@/components/ui/segmented'
 import { cn } from '@/lib/utils'
 import * as api from '../../api/client'
 import { errorMessage } from '../../api/client'
-import type { WorkoutActivity, WorkoutIntensity } from '../../api/types'
+import type {
+  Workout,
+  WorkoutActivity,
+  WorkoutIntensity,
+  WorkoutInput,
+} from '../../api/types'
 import { invalidateWorkoutData } from '../../lib/queries'
+import { useOfflineWrite } from '../../lib/useOfflineWrite'
 import { useToast } from '../Toast'
 
 export const ACTIVITY_META: Record<
@@ -58,6 +64,7 @@ export function WorkoutSheet({ open, onClose }: WorkoutSheetProps) {
   const qc = useQueryClient()
   const toast = useToast()
 
+  const write = useOfflineWrite()
   const [activity, setActivity] = useState<WorkoutActivity | null>(null)
   const [duration, setDuration] = useState('30')
   const [intensity, setIntensity] = useState<WorkoutIntensity>('moderate')
@@ -68,20 +75,31 @@ export function WorkoutSheet({ open, onClose }: WorkoutSheetProps) {
     mutationFn: () => {
       if (!activity) throw new Error('activity required')
       const cals = calories.trim() === '' ? undefined : Number(calories)
-      return api.createWorkout({
+      const input: WorkoutInput = {
         activity,
         duration_min: Number(duration),
         intensity,
         ...(cals !== undefined ? { calories: cals } : {}),
         ...(notes.trim() ? { notes: notes.trim() } : {}),
-      })
+      }
+      let logged: Workout | null = null
+      return write({
+        payload: { kind: 'workout', input },
+        send: async () => {
+          logged = await api.createWorkout(input)
+        },
+        onSent: () => invalidateWorkoutData(qc),
+      }).then((res) => ({ ...res, logged }))
     },
-    onSuccess: (w) => {
-      invalidateWorkoutData(qc)
+    onSuccess: ({ queued, logged }) => {
+      // Queued workouts have no calorie figure yet: the server estimates it
+      // from the profile weight when the entry actually lands.
       toast.show(
-        w.calories_estimated
-          ? `Logged — about ${w.calories} kcal burned`
-          : `Logged — ${w.calories} kcal burned`,
+        queued
+          ? "Saved offline — it'll sync when you're back."
+          : logged?.calories_estimated
+            ? `Logged — about ${logged.calories} kcal burned`
+            : `Logged — ${logged?.calories} kcal burned`,
       )
       handleClose()
     },

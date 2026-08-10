@@ -178,12 +178,15 @@ enums as listed. Setting `weight_kg` here does NOT create a WeightEntry.
   `date` wins, default today. → 200 `{ "logs": [FoodLog, ...] }` ordered by `logged_at` asc.
 - `PUT /logs/{id}` (partial; explicit `"food_ref_id": null` clears) → 200 `FoodLog` · `DELETE /logs/{id}` → 204.
 
-**Idempotency.** The PWA queues logs written offline and retries them, so a request whose
-response was lost in transit gets replayed. When `client_key` is present the pair
-(user, client_key) is unique: a replay returns **200** with the originally created log instead
-of inserting a duplicate. Requests that omit `client_key` are never deduplicated — two identical
-manual entries are two real meals. `client_key` is POST-only; sending it to `PUT /logs/{id}`
-is a 400.
+**Idempotency.** The PWA queues writes made offline and retries them, so a request whose
+response was lost in transit gets replayed. `POST /logs`, `POST /workouts`, `POST /weights`
+and `POST /habits/{id}/logs` all accept an optional `client_key` (1–64 chars). The key is
+unique per owner — `(user_id, client_key)`, or `(habit_id, client_key)` for habit logs — so a
+replay returns **200** with the originally created row instead of inserting a duplicate.
+Requests that omit `client_key` are never deduplicated: two identical manual entries are two
+real meals. `client_key` is POST-only; sending it to a `PUT` is a 400.
+
+`PUT /diary/{date}` needs no key — it is an upsert on (user, date) and is already idempotent.
 
 ### Workouts
 
