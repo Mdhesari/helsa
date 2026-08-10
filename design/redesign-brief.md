@@ -1,6 +1,7 @@
 # Helsa v2 — CalAI-style design brief
 
-Distilled from `benchmark/calai/` (34 screenshots of Cal AI's onboarding + plan screens).
+Distilled from a set of 34 reference screenshots of Cal AI's onboarding + plan screens
+(kept out of this repo).
 This supersedes the previous mascot-centric design; the mascot SVGs are retired.
 
 ## Design language

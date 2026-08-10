@@ -1,2 +1,5 @@
 # Secrets for the docker compose deployment (see devops/.env.example)
 devops/.env
+
+# Third-party reference screenshots — not distributed with the project
+benchmark/
