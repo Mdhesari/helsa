@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -49,8 +50,8 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	case email == "" || !strings.Contains(email, "@"):
 		badRequest(w, "a valid email is required")
 		return
-	case len(req.Password) < 8:
-		badRequest(w, "password must be at least 8 characters")
+	case len(req.Password) < auth.MinPasswordLength:
+		badRequest(w, fmt.Sprintf("password must be at least %d characters", auth.MinPasswordLength))
 		return
 	}
 	tz := "UTC"
@@ -181,8 +182,8 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, err.Error())
 		return
 	}
-	if len(req.NewPassword) < 8 {
-		badRequest(w, "new_password must be at least 8 characters")
+	if len(req.NewPassword) < auth.MinPasswordLength {
+		badRequest(w, fmt.Sprintf("new_password must be at least %d characters", auth.MinPasswordLength))
 		return
 	}
 	var hash string
@@ -195,20 +196,8 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "invalid_credentials", "current password is incorrect")
 		return
 	}
-	newHash, err := auth.HashPassword(req.NewPassword)
+	changedAt, err := auth.SetPassword(r.Context(), s.db, u.ID, req.NewPassword, s.now())
 	if err != nil {
-		internalError(w, err)
-		return
-	}
-	// Guarantee pwd_at moves forward even within the same second, so every
-	// previously issued token is revoked.
-	changedAt := s.now().Unix()
-	if changedAt <= u.PasswordChangedAt {
-		changedAt = u.PasswordChangedAt + 1
-	}
-	if _, err := s.db.ExecContext(r.Context(),
-		`UPDATE users SET password_hash = ?, password_changed_at = ? WHERE id = ?`,
-		newHash, changedAt, u.ID); err != nil {
 		internalError(w, err)
 		return
 	}

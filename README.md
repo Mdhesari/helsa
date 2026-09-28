@@ -36,6 +36,22 @@ cd frontend && npm install && npm run dev
 | `OPENROUTER_API_KEY` | empty → deterministic stub insights | |
 | `AI_MODEL` | `anthropic/claude-sonnet-5` | OpenRouter model id |
 
+## Admin CLI
+
+`backend/cmd/admin`, shipped as `helsa-admin` in the backend image, works on the
+database directly. Today it has one command, for users who are locked out:
+
+```sh
+cd backend && go run ./cmd/admin set-password -email sara@x.com
+```
+
+It prompts twice without echo (`-password-stdin` reads one line from a pipe
+instead), applies the API's 8-character minimum, and revokes every session the
+user has, the same as `PUT /me/password`. `-db` defaults to `$DB_PATH`, else
+`./helsa.db`; the database must already exist and is never migrated or seeded.
+In production, run it in the backend container — see
+[`devops/README.md`](devops/README.md#reset-a-users-password).
+
 ## Architecture notes
 
 - **Auth**: 7-day HS256 JWT with a `pwd_at` claim checked against `users.password_changed_at`

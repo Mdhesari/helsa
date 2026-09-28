@@ -209,6 +209,56 @@ func TestHappyPath(t *testing.T) {
 	}
 }
 
+// Changing the password revokes every token issued before the change — here
+// the register token, usually issued within the same second.
+func TestChangePassword(t *testing.T) {
+	base := newTestServer(t)
+	oldToken := register(t, base, "Sara K", "sara@x.com", "UTC")
+
+	var errBody struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	resp := doJSON(t, http.MethodPut, base+"/me/password", oldToken, map[string]any{
+		"current_password": "wrongpass", "new_password": "new-password",
+	}, &errBody)
+	if resp.StatusCode != http.StatusUnauthorized || errBody.Error.Code != "invalid_credentials" {
+		t.Fatalf("wrong current password = %d %+v, want 401 invalid_credentials", resp.StatusCode, errBody)
+	}
+	resp = doJSON(t, http.MethodPut, base+"/me/password", oldToken, map[string]any{
+		"current_password": "secret123", "new_password": "short",
+	}, &errBody)
+	if resp.StatusCode != http.StatusBadRequest || errBody.Error.Code != "invalid_request" {
+		t.Fatalf("short new password = %d %+v, want 400 invalid_request", resp.StatusCode, errBody)
+	}
+
+	var changed struct {
+		Token string `json:"token"`
+	}
+	resp = doJSON(t, http.MethodPut, base+"/me/password", oldToken, map[string]any{
+		"current_password": "secret123", "new_password": "new-password",
+	}, &changed)
+	if resp.StatusCode != http.StatusOK || changed.Token == "" {
+		t.Fatalf("change password = %d %+v, want 200 with a token", resp.StatusCode, changed)
+	}
+
+	if resp := doJSON(t, http.MethodGet, base+"/me", oldToken, nil, nil); resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("token from before the change = %d, want 401", resp.StatusCode)
+	}
+	if resp := doJSON(t, http.MethodGet, base+"/me", changed.Token, nil, nil); resp.StatusCode != http.StatusOK {
+		t.Errorf("token from the change = %d, want 200", resp.StatusCode)
+	}
+	for password, want := range map[string]int{"secret123": http.StatusUnauthorized, "new-password": http.StatusOK} {
+		resp := doJSON(t, http.MethodPost, base+"/auth/login", "", map[string]any{
+			"email": "sara@x.com", "password": password,
+		}, nil)
+		if resp.StatusCode != want {
+			t.Errorf("login with %q = %d, want %d", password, resp.StatusCode, want)
+		}
+	}
+}
+
 // A queued offline log that is replayed (because the first response was lost)
 // must not create a second row — the outbox relies on this.
 func TestCreateLogClientKeyIsIdempotent(t *testing.T) {

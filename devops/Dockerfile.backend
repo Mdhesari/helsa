@@ -14,6 +14,9 @@ COPY backend/ ./
 # modernc.org/sqlite is pure Go, so a fully static CGO-free build works.
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" \
     -o /out/helsa-server ./cmd/server
+# Operator CLI (password resets): `docker compose exec backend helsa-admin`.
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" \
+    -o /out/helsa-admin ./cmd/admin
 
 # ---- runtime stage ----
 # alpine (not scratch) so the compose healthcheck can use busybox wget.
@@ -25,6 +28,7 @@ RUN addgroup -S -g 10001 helsa \
     && chown helsa:helsa /data
 
 COPY --from=build /out/helsa-server /usr/local/bin/helsa-server
+COPY --from=build /out/helsa-admin /usr/local/bin/helsa-admin
 
 USER helsa
 

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
+	"os"
 
 	_ "modernc.org/sqlite"
 
@@ -14,11 +15,14 @@ import (
 //go:embed schema.sql
 var schema string
 
+// pragmas are applied to every connection by both Open and OpenExisting.
+const pragmas = "_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"
+
 // Open opens (creating if needed) the SQLite database at path, enables
 // foreign keys and a busy timeout on every connection, applies the embedded
 // idempotent schema, and seeds the reference food data when it changed.
 func Open(path string) (*sql.DB, error) {
-	dsn := fmt.Sprintf("file:%s?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)", path)
+	dsn := fmt.Sprintf("file:%s?%s", path, pragmas)
 	sqlDB, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
@@ -76,6 +80,28 @@ func Open(path string) (*sql.DB, error) {
 	if err := fooddata.Seed(sqlDB); err != nil {
 		sqlDB.Close()
 		return nil, fmt.Errorf("seed food data: %w", err)
+	}
+	return sqlDB, nil
+}
+
+// OpenExisting opens the database at path with the same connection pragmas as
+// Open, but fails when the file does not exist and never applies the schema or
+// seeds. Admin tools use it so a mistyped path cannot leave a fresh empty
+// database behind, and a live database is never migrated as a side effect.
+func OpenExisting(path string) (*sql.DB, error) {
+	// mode=rw is what guarantees no file gets created; the Stat is only for a
+	// readable error, since SQLite reports a missing file as "out of memory (14)".
+	if _, err := os.Stat(path); err != nil {
+		return nil, err
+	}
+	dsn := fmt.Sprintf("file:%s?mode=rw&%s", path, pragmas)
+	sqlDB, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("open sqlite: %w", err)
+	}
+	if err := sqlDB.Ping(); err != nil {
+		sqlDB.Close()
+		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
 	return sqlDB, nil
 }
