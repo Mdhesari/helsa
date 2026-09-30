@@ -142,6 +142,9 @@ func setPassword(args []string, stdin *os.File, stdout, stderr io.Writer) error 
 	if len(password) < auth.MinPasswordLength {
 		return fmt.Errorf("password must be at least %d characters", auth.MinPasswordLength)
 	}
+	if len(password) > auth.MaxPasswordLength {
+		return fmt.Errorf("password must be at most %d bytes", auth.MaxPasswordLength)
+	}
 
 	if _, err := auth.SetPassword(context.Background(), sqlDB, id, password, time.Now()); err != nil {
 		return fmt.Errorf("set password: %w", err)

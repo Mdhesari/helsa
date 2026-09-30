@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"helsa/backend/internal/api"
@@ -256,6 +257,51 @@ func TestChangePassword(t *testing.T) {
 		if resp.StatusCode != want {
 			t.Errorf("login with %q = %d, want %d", password, resp.StatusCode, want)
 		}
+	}
+}
+
+// bcrypt hashes at most 72 bytes and refuses anything longer, so a longer
+// password has to be a 400 invalid_request rather than a 500 from the hash.
+// The limit counts bytes, not characters.
+func TestPasswordTooLong(t *testing.T) {
+	base := newTestServer(t)
+	token := register(t, base, "Sara K", "sara@x.com", "UTC")
+
+	var errBody struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	// 73 ASCII bytes, then 37 characters that take 74 bytes.
+	for _, password := range []string{strings.Repeat("x", 73), strings.Repeat("é", 37)} {
+		resp := doJSON(t, http.MethodPost, base+"/auth/register", "", map[string]any{
+			"full_name": "Ada L", "email": "ada@x.com", "password": password,
+		}, &errBody)
+		if resp.StatusCode != http.StatusBadRequest || errBody.Error.Code != "invalid_request" {
+			t.Errorf("register with a %d-byte password = %d %+v, want 400 invalid_request",
+				len(password), resp.StatusCode, errBody)
+		}
+		resp = doJSON(t, http.MethodPut, base+"/me/password", token, map[string]any{
+			"current_password": "secret123", "new_password": password,
+		}, &errBody)
+		if resp.StatusCode != http.StatusBadRequest || errBody.Error.Code != "invalid_request" {
+			t.Errorf("change to a %d-byte password = %d %+v, want 400 invalid_request",
+				len(password), resp.StatusCode, errBody)
+		}
+	}
+
+	// Exactly 72 bytes is accepted. These also show the rejections above left
+	// no account behind and Sara's password and token untouched.
+	longest := strings.Repeat("x", 72)
+	if resp := doJSON(t, http.MethodPost, base+"/auth/register", "", map[string]any{
+		"full_name": "Ada L", "email": "ada@x.com", "password": longest,
+	}, nil); resp.StatusCode != http.StatusCreated {
+		t.Errorf("register with a 72-byte password = %d, want 201", resp.StatusCode)
+	}
+	if resp := doJSON(t, http.MethodPut, base+"/me/password", token, map[string]any{
+		"current_password": "secret123", "new_password": longest,
+	}, nil); resp.StatusCode != http.StatusOK {
+		t.Errorf("change to a 72-byte password = %d, want 200", resp.StatusCode)
 	}
 }
 

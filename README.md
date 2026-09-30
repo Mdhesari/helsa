@@ -46,8 +46,8 @@ cd backend && go run ./cmd/admin set-password -email sara@x.com
 ```
 
 It prompts twice without echo (`-password-stdin` reads one line from a pipe
-instead), applies the API's 8-character minimum, and revokes every session the
-user has, the same as `PUT /me/password`. `-db` defaults to `$DB_PATH`, else
+instead), applies the API's password rules (at least 8 characters, at most 72
+bytes), and revokes every session the user has, the same as `PUT /me/password`. `-db` defaults to `$DB_PATH`, else
 `./helsa.db`; the database must already exist and is never migrated or seeded.
 In production, run it in the backend container — see
 [`devops/README.md`](devops/README.md#reset-a-users-password).

@@ -53,6 +53,9 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	case len(req.Password) < auth.MinPasswordLength:
 		badRequest(w, fmt.Sprintf("password must be at least %d characters", auth.MinPasswordLength))
 		return
+	case len(req.Password) > auth.MaxPasswordLength:
+		badRequest(w, fmt.Sprintf("password must be at most %d bytes", auth.MaxPasswordLength))
+		return
 	}
 	tz := "UTC"
 	if req.Timezone != nil {
@@ -184,6 +187,10 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(req.NewPassword) < auth.MinPasswordLength {
 		badRequest(w, fmt.Sprintf("new_password must be at least %d characters", auth.MinPasswordLength))
+		return
+	}
+	if len(req.NewPassword) > auth.MaxPasswordLength {
+		badRequest(w, fmt.Sprintf("new_password must be at most %d bytes", auth.MaxPasswordLength))
 		return
 	}
 	var hash string

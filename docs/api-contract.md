@@ -33,7 +33,8 @@ Codes: `invalid_request` (400), `invalid_credentials` (401), `unauthorized` (401
 - JWT HS256, expiry 7 days. Claims: `sub` (user id, string), `iat`, `exp`, `pwd_at` (unix seconds of `users.password_changed_at`).
 - On every authenticated request the server loads the user and rejects with 401 `unauthorized`
   if `pwd_at` claim ≠ current `users.password_changed_at`. This is the sole revocation mechanism.
-- Password rules: min 8 characters. Hashing: bcrypt (default cost).
+- Password rules: min 8 characters, max 72 bytes of UTF-8 (bcrypt's input limit, so fewer non-ASCII
+  characters fit). Hashing: bcrypt (default cost).
 - `timezone` must be a valid IANA name (validate with `time.LoadLocation`); default `"UTC"`.
 
 ## Shared object shapes
@@ -145,7 +146,7 @@ Errors: 401 `invalid_credentials` (same response for unknown email or wrong pass
 
 ### PUT /me/password
 `{ "current_password", "new_password" }` → 200 `{ "token" }` (fresh token; all previous tokens revoked via `pwd_at`).
-Errors: 401 `invalid_credentials`, 400 `invalid_request` (weak new password).
+Errors: 401 `invalid_credentials`, 400 `invalid_request` (new password too short or too long).
 
 ### GET /me/profile → 200 `Profile` (all-null fields if never set)
 
