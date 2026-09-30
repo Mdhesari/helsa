@@ -19,6 +19,11 @@ const TokenTTL = 7 * 24 * time.Hour
 // MinPasswordLength is the shortest password accepted wherever one is set.
 const MinPasswordLength = 8
 
+// MaxPasswordLength is the longest password accepted wherever one is set. It
+// counts bytes, not characters: bcrypt hashes at most 72 bytes and
+// HashPassword fails on anything longer.
+const MaxPasswordLength = 72
+
 // User is the authenticated user loaded from the database on every request.
 type User struct {
 	ID                int64
@@ -46,7 +51,8 @@ func CheckPassword(hash, password string) bool {
 // SetPassword replaces a user's password and moves password_changed_at
 // forward, which revokes every token issued before the change. It returns the
 // new password_changed_at (the pwd_at for a fresh token), or sql.ErrNoRows
-// when the user does not exist. Callers enforce MinPasswordLength.
+// when the user does not exist. Callers enforce MinPasswordLength and
+// MaxPasswordLength.
 func SetPassword(ctx context.Context, db *sql.DB, userID int64, password string, now time.Time) (int64, error) {
 	hash, err := HashPassword(password)
 	if err != nil {

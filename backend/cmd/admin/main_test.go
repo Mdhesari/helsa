@@ -111,6 +111,7 @@ func TestSetPasswordRejects(t *testing.T) {
 		{"piped without -password-stdin", set("-email", "sara@x.com"), "new-password", 2, "stdin is not a terminal"},
 		{"unknown user", set("-email", "nobody@x.com", "-password-stdin"), "new-password", 1, "no user with email nobody@x.com"},
 		{"short password", set("-email", "sara@x.com", "-password-stdin"), "short\n", 1, "at least 8 characters"},
+		{"long password", set("-email", "sara@x.com", "-password-stdin"), strings.Repeat("x", 73) + "\n", 1, "at most 72 bytes"},
 		{"empty stdin", set("-email", "sara@x.com", "-password-stdin"), "", 1, "at least 8 characters"},
 		{"two lines", set("-email", "sara@x.com", "-password-stdin"), "new-password\nmore\n", 1, "single line"},
 		{"missing database", []string{"set-password", "-db", missing, "-email", "sara@x.com", "-password-stdin"},
