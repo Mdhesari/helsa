@@ -6,6 +6,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/xuri/excelize/v2 v2.8.1
 	golang.org/x/crypto v0.24.0
+	golang.org/x/term v0.21.0
 	modernc.org/sqlite v1.30.1
 )
 

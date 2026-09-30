@@ -1,6 +1,9 @@
 package auth_test
 
 import (
+	"context"
+	"database/sql"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -23,6 +26,59 @@ func TestPasswordHashRoundTrip(t *testing.T) {
 	}
 	if auth.CheckPassword(hash, "wrongpass") {
 		t.Error("wrong password accepted")
+	}
+}
+
+func TestSetPassword(t *testing.T) {
+	sqlDB, err := db.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sqlDB.Close()
+
+	const pwdChangedAt = 1750000000
+	res, err := sqlDB.Exec(
+		`INSERT INTO users (full_name, email, password_hash, password_changed_at, timezone, created_at)
+		 VALUES ('Sara K', 's@x.com', 'hash', ?, 'UTC', ?)`, pwdChangedAt, pwdChangedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	userID, err := res.LastInsertId()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+
+	// Same second as the last change: pwd_at must still move forward, or a
+	// token issued earlier in that second would survive the change.
+	changedAt, err := auth.SetPassword(ctx, sqlDB, userID, "new-password", time.Unix(pwdChangedAt, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changedAt != pwdChangedAt+1 {
+		t.Errorf("same-second change: pwd_at = %d, want %d", changedAt, pwdChangedAt+1)
+	}
+
+	later := time.Unix(pwdChangedAt+100, 0)
+	if changedAt, err = auth.SetPassword(ctx, sqlDB, userID, "newer-password", later); err != nil {
+		t.Fatal(err)
+	}
+	if changedAt != later.Unix() {
+		t.Errorf("later change: pwd_at = %d, want %d", changedAt, later.Unix())
+	}
+	var hash string
+	var stored int64
+	if err := sqlDB.QueryRow(`SELECT password_hash, password_changed_at FROM users WHERE id = ?`, userID).
+		Scan(&hash, &stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored != changedAt || !auth.CheckPassword(hash, "newer-password") {
+		t.Errorf("stored pwd_at %d (returned %d); hash matches newer-password: %v",
+			stored, changedAt, auth.CheckPassword(hash, "newer-password"))
+	}
+
+	if _, err := auth.SetPassword(ctx, sqlDB, userID+999, "new-password", later); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("unknown user: err = %v, want sql.ErrNoRows", err)
 	}
 }
 

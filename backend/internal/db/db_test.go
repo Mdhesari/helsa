@@ -2,6 +2,7 @@ package db_test
 
 import (
 	"database/sql"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -55,6 +56,40 @@ func TestOpenFreshDB(t *testing.T) {
 	}
 	if hits == 0 {
 		t.Error("FTS5 MATCH 'chick*' found nothing")
+	}
+}
+
+func TestOpenExisting(t *testing.T) {
+	dir := t.TempDir()
+	missing := filepath.Join(dir, "missing.db")
+	if sqlDB, err := db.OpenExisting(missing); err == nil {
+		sqlDB.Close()
+		t.Fatal("OpenExisting on a missing file should fail")
+	}
+	if _, err := os.Stat(missing); !os.IsNotExist(err) {
+		t.Fatalf("OpenExisting left a file behind (stat err: %v)", err)
+	}
+
+	path := filepath.Join(dir, "helsa.db")
+	created, err := db.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created.Close()
+	sqlDB, err := db.OpenExisting(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sqlDB.Close()
+	var foreignKeys, busyTimeout int
+	if err := sqlDB.QueryRow(`PRAGMA foreign_keys`).Scan(&foreignKeys); err != nil {
+		t.Fatal(err)
+	}
+	if err := sqlDB.QueryRow(`PRAGMA busy_timeout`).Scan(&busyTimeout); err != nil {
+		t.Fatal(err)
+	}
+	if foreignKeys != 1 || busyTimeout != 5000 {
+		t.Errorf("pragmas: foreign_keys=%d busy_timeout=%d, want 1 and 5000", foreignKeys, busyTimeout)
 	}
 }
 

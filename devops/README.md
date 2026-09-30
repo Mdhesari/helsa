@@ -88,6 +88,24 @@ docker compose down                # stop (data survives)
 docker compose down -v             # stop AND DELETE the database volume
 ```
 
+## Reset a user's password
+
+There is no self-service reset, so an operator sets a new password with the
+admin CLI that ships in the backend image. It finds the database through the
+container's `DB_PATH`:
+
+```sh
+docker compose exec backend helsa-admin set-password -email sara@x.com
+```
+
+It prompts twice without echo and signs the user out on every device. From a
+script, pipe the password in instead (`-T`, since there is no terminal):
+
+```sh
+printf '%s' "$NEW_PASSWORD" | docker compose exec -T backend \
+  helsa-admin set-password -email sara@x.com -password-stdin
+```
+
 ## Notes
 
 - `JWT_SECRET` is enforced at compose level (`${JWT_SECRET:?}`) because the app
